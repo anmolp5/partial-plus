@@ -84,7 +84,7 @@
         
         <!-- Active Workout Card -->
         <div class="glass-card" id="today-routine-card">
-          <h2 id="today-routine-label" style="margin-bottom:4px;">Day 5 - Lower</h2>
+          <h2 id="today-routine-label" style="margin-bottom:4px;">Lower</h2>
           <p id="today-routine-exercises" style="margin-bottom:14px; font-size:13px; color:var(--text-muted);">
             Leg Extensions, Seated Curls, Calf Raises
           </p>
@@ -93,12 +93,12 @@
           <div class="swap-dropdown-container" id="swap-container">
             <label for="swap-select">Template Assigned Today:</label>
             <select id="swap-select" class="dropdown-select">
-              <option value="Monday">Monday (Day 1 - Push)</option>
-              <option value="Tuesday">Tuesday (Day 3 - Legs)</option>
-              <option value="Wednesday">Wednesday (Day 2 - Pull)</option>
+              <option value="Monday">Monday (Push)</option>
+              <option value="Tuesday">Tuesday (Legs)</option>
+              <option value="Wednesday">Wednesday (Pull)</option>
               <option value="Thursday">Thursday (Rest Day)</option>
-              <option value="Friday">Friday (Day 4 - Upper)</option>
-              <option value="Saturday" selected>Saturday (Day 5 - Lower)</option>
+              <option value="Friday">Friday (Upper)</option>
+              <option value="Saturday" selected>Saturday (Lower)</option>
               <option value="Sunday">Sunday (Rest Day)</option>
             </select>
             <button id="btn-swap-workout" class="btn btn-secondary" style="margin-top:8px; display:none; padding:10px 14px;">Swap Workout</button>
@@ -138,7 +138,7 @@
       <section id="workout-view" class="view-panel">
         <div class="workout-header">
           <div style="display:flex; flex-direction:column; gap:2px;">
-            <h3 id="workout-view-day-label">Day 1 - Push</h3>
+            <h3 id="workout-view-day-label">Push</h3>
             <span id="workout-view-date" style="font-size:11px; color:var(--text-muted); font-weight:600;">Sat, May 30</span>
           </div>
           <div class="workout-progress-bar">
@@ -258,7 +258,7 @@
         <form method="dialog" class="dialog-content">
           <div class="dialog-header" id="history-log-title">Saturday, May 30</div>
           <div class="dialog-body" style="max-height:300px; overflow-y:auto; padding-right:4px;">
-            <h4 id="history-log-routine-label" style="font-weight:600; color:var(--accent-mint); margin-bottom:10px;">Day 5 - Lower</h4>
+            <h4 id="history-log-routine-label" style="font-weight:600; color:var(--accent-mint); margin-bottom:10px;">Lower</h4>
             <div id="history-log-details-container">
               <!-- Dynamically populated list of completed exercises -->
             </div>

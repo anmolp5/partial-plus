@@ -386,7 +386,10 @@ function setupEventListeners() {
 // -------------------------------------------------------------
 // 2. Date Utilities & Week Swap Controller
 // -------------------------------------------------------------
-function getLocalDateString(date = new Date()) {
+function getLocalDateString(date) {
+  if (!date) {
+    date = new Date();
+  }
   const offset = date.getTimezoneOffset();
   const localDate = new Date(date.getTime() - (offset*60*1000));
   return localDate.toISOString().split('T')[0];
@@ -452,16 +455,33 @@ function renderTodayRoutineDetails(dateStr) {
   const swapSelect = document.getElementById('swap-select');
   const startBtn = document.getElementById('btn-start-workout');
 
+  const hasCompletedToday = !!state.history[dateStr];
+
   // Set visual label details
   labelEl.textContent = routine.isRest ? 'Rest Day' : routine.label;
   
-  if (routine.isRest) {
-    exercisesEl.textContent = 'Enjoy your rest day! Recover well.';
-    startBtn.style.display = 'none';
-  } else {
-    const list = routine.exercises.map(ex => ex.name).join(', ');
-    exercisesEl.textContent = list;
+  if (hasCompletedToday) {
+    const completedLog = state.history[dateStr];
+    if (completedLog) {
+      const list = completedLog.exercises.map(ex => ex.name).join(', ');
+      exercisesEl.textContent = list;
+    } else {
+      exercisesEl.textContent = routine.exercises.map(ex => ex.name).join(', ');
+    }
+    startBtn.textContent = 'Edit Workout';
     startBtn.style.display = 'block';
+    swapSelect.disabled = true;
+  } else {
+    startBtn.textContent = 'Start Workout';
+    swapSelect.disabled = false;
+    if (routine.isRest) {
+      exercisesEl.textContent = 'Enjoy your rest day! Recover well.';
+      startBtn.style.display = 'none';
+    } else {
+      const list = routine.exercises.map(ex => ex.name).join(', ');
+      exercisesEl.textContent = list;
+      startBtn.style.display = 'block';
+    }
   }
 
   // Populate Swaps Dropdown
@@ -496,8 +516,12 @@ function renderTodayRoutineDetails(dateStr) {
       option.selected = true;
     }
 
-    // Disable if completed, EXCEPT if it's currently selected (completed but assigned here)
-    if (completedTemplates.has(assignedTemplate) && assignedTemplate !== templateDay) {
+    // Disable if completed, EXCEPT if it's currently selected, it's a Rest Day, or today is a Rest Day
+    const todayInfo = config[templateDay];
+    if (completedTemplates.has(assignedTemplate) && 
+        assignedTemplate !== templateDay && 
+        !info.isRest && 
+        (!todayInfo || !todayInfo.isRest)) {
       option.disabled = true;
       option.textContent += ' [Completed]';
     }
@@ -550,6 +574,8 @@ async function handleSwapButtonClick() {
     return;
   }
   
+  const config = getRoutineConfig();
+  
   // Check if same template
   if (selectedTemplate === currentTemplate) {
     showSwapBanner("Swap invalid: Today is already assigned to this template.", true);
@@ -567,7 +593,11 @@ async function handleSwapButtonClick() {
       completedTemplates.add(log.templateDay);
     }
   });
-  if (completedTemplates.has(selectedTemplate)) {
+  const currentTemplateInfo = config[currentTemplate];
+  const selectedTemplateInfo = config[selectedTemplate];
+  if (completedTemplates.has(selectedTemplate) && 
+      !selectedTemplateInfo.isRest && 
+      (!currentTemplateInfo || !currentTemplateInfo.isRest)) {
     showSwapBanner("Swap invalid: This template has already been completed this week.", true);
     swapBtn.disabled = false;
     swapBtn.innerHTML = originalHtml;
@@ -613,7 +643,25 @@ function executeSwap(todayDayName, selectedTemplateDay, weekId) {
   }
 
   const currentSwaps = state.weekSwaps[weekId];
-  const currentTemplate = currentSwaps[todayDayName];
+
+  // 1. Undo any existing swap that todayDayName is currently involved in
+  const currentTemplateForToday = currentSwaps[todayDayName];
+  if (currentTemplateForToday !== todayDayName) {
+    let dayHoldingTodayTemplate = '';
+    for (const [day, temp] of Object.entries(currentSwaps)) {
+      if (temp === todayDayName) {
+        dayHoldingTodayTemplate = day;
+        break;
+      }
+    }
+    if (dayHoldingTodayTemplate) {
+      currentSwaps[todayDayName] = todayDayName;
+      currentSwaps[dayHoldingTodayTemplate] = dayHoldingTodayTemplate;
+    }
+  }
+
+  // 2. Perform the new swap: swap todayDayName with the day currently holding selectedTemplateDay
+  const currentTemplate = currentSwaps[todayDayName]; // which is now todayDayName
 
   let weekdayToSwap = '';
   for (const [day, temp] of Object.entries(currentSwaps)) {
@@ -727,6 +775,13 @@ function createDayCell(dateObj, isOtherMonth) {
 // -------------------------------------------------------------
 function startActiveWorkoutSession() {
   const todayStr = getLocalDateString();
+  
+  // Redirect to edit mode if today's workout is already completed
+  if (state.history[todayStr]) {
+    startEditingTodayWorkout(todayStr);
+    return;
+  }
+
   const templateDay = getAssignedTemplateDay(todayStr);
   const config = getRoutineConfig();
   const routine = config[templateDay];
@@ -1233,6 +1288,10 @@ function showCalendarDayDetails(dateStr) {
 
 function editHistoricalWorkout() {
   const dateStr = document.getElementById('btn-edit-historical-workout').dataset.date;
+  startEditingTodayWorkout(dateStr);
+}
+
+function startEditingTodayWorkout(dateStr) {
   const log = state.history[dateStr];
 
   if (!log) return;

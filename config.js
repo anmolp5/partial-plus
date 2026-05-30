@@ -6,7 +6,7 @@
 
 export const DEFAULT_ROUTINE = {
   "Monday": {
-    "label": "Day 1 - Push",
+    "label": "Push",
     "isRest": false,
     "exercises": [
       { "name": "Incline Dumbbell Press", "tag": "HC", "target": "Chest/Shoulders", "sets": 3 },
@@ -16,7 +16,7 @@ export const DEFAULT_ROUTINE = {
     ]
   },
   "Tuesday": {
-    "label": "Day 3 - Legs",
+    "label": "Legs",
     "isRest": false,
     "exercises": [
       { "name": "Leg Press", "tag": "HC", "target": "Quads/Glutes", "sets": 3 },
@@ -26,7 +26,7 @@ export const DEFAULT_ROUTINE = {
     ]
   },
   "Wednesday": {
-    "label": "Day 2 - Pull",
+    "label": "Pull",
     "isRest": false,
     "exercises": [
       { "name": "Chest-Supported Row", "tag": "HC", "target": "Back", "sets": 3 },
@@ -41,7 +41,7 @@ export const DEFAULT_ROUTINE = {
     "exercises": []
   },
   "Friday": {
-    "label": "Day 4 - Upper",
+    "label": "Upper",
     "isRest": false,
     "exercises": [
       { "name": "Standing Barbell Overhead Press", "tag": "HC", "target": "Shoulders", "sets": 3 },
@@ -51,7 +51,7 @@ export const DEFAULT_ROUTINE = {
     ]
   },
   "Saturday": {
-    "label": "Day 5 - Lower",
+    "label": "Lower",
     "isRest": false,
     "exercises": [
       { "name": "45-Degree Back Extension", "tag": "HC", "target": "Hamstrings/Glutes", "sets": 3 },
@@ -83,7 +83,42 @@ export function getRoutineConfig() {
     return DEFAULT_ROUTINE;
   }
   try {
-    return JSON.parse(saved);
+    const parsed = JSON.parse(saved);
+    let modified = false;
+
+    // Clean up "Day X - " prefixes from labels
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    days.forEach(day => {
+      if (parsed[day] && parsed[day].label) {
+        const oldLabel = parsed[day].label;
+        const newLabel = oldLabel.replace(/^Day \d+\s*-\s*/, "");
+        if (newLabel !== oldLabel) {
+          parsed[day].label = newLabel;
+          modified = true;
+        }
+      }
+    });
+
+    // Ensure Tuesday is Legs and Wednesday is Pull
+    // If Tuesday contains "Pull" (or has pull exercises) and Wednesday contains "Legs" (or has leg exercises), swap them
+    const tuesdayIsPull = parsed.Tuesday && (parsed.Tuesday.label === "Pull" || (parsed.Tuesday.exercises && parsed.Tuesday.exercises.some(e => e.name.includes("Row") || e.name.includes("Pulldown"))));
+    const wednesdayIsLegs = parsed.Wednesday && (parsed.Wednesday.label === "Legs" || (parsed.Wednesday.exercises && parsed.Wednesday.exercises.some(e => e.name.includes("Leg"))));
+
+    if (tuesdayIsPull && wednesdayIsLegs) {
+      console.log("Migrating older routine configuration (Swapping Tuesday/Wednesday to Legs/Pull)...");
+      const temp = parsed.Tuesday;
+      parsed.Tuesday = parsed.Wednesday;
+      parsed.Wednesday = temp;
+      parsed.Tuesday.label = "Legs";
+      parsed.Wednesday.label = "Pull";
+      modified = true;
+    }
+
+    if (modified) {
+      localStorage.setItem(STORAGE_KEYS.ROUTINE, JSON.stringify(parsed));
+    }
+
+    return parsed;
   } catch (e) {
     console.error("Failed to parse saved routine configuration, falling back to default.", e);
     return DEFAULT_ROUTINE;
