@@ -811,10 +811,36 @@ function handleInputValueChange(setIndex, element) {
 
   if (element.classList.contains('val-weight')) {
     set.weight = element.value;
+    // Auto-populate subsequent sets if editing Set 1 (index 0)
+    if (setIndex === 0) {
+      for (let i = 1; i < ex.setData.length; i++) {
+        ex.setData[i].weight = element.value;
+        const otherInput = document.querySelector(`.matrix-input.val-weight[data-set="${i}"]`);
+        if (otherInput) otherInput.value = element.value;
+      }
+    }
   } else if (element.classList.contains('val-reps')) {
     set.reps = element.value;
+    // Auto-populate subsequent sets if editing Set 1 (index 0)
+    if (setIndex === 0) {
+      for (let i = 1; i < ex.setData.length; i++) {
+        ex.setData[i].reps = element.value;
+        const otherInput = document.querySelector(`.matrix-input.val-reps[data-set="${i}"]`);
+        if (otherInput) otherInput.value = element.value;
+      }
+    }
   } else if (element.classList.contains('val-rir')) {
     set.rir = element.value;
+    // Auto-populate subsequent sets if editing Set 1 (index 0)
+    if (setIndex === 0) {
+      for (let i = 1; i < ex.setData.length; i++) {
+        if (!isFailureSet(ex.tag, i)) {
+          ex.setData[i].rir = element.value;
+          const otherInput = document.querySelector(`.matrix-input.val-rir[data-set="${i}"]`);
+          if (otherInput) otherInput.value = element.value;
+        }
+      }
+    }
   }
 
   saveActiveWorkoutState();
@@ -827,6 +853,15 @@ function handleInputFocus(inputElement) {
     const row = inputElement.closest('.matrix-row') || inputElement;
     row.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
     
+    // Select all text in input to allow instant overwriting
+    if (typeof inputElement.select === 'function') {
+      inputElement.select();
+    }
+    if (typeof inputElement.setSelectionRange === 'function') {
+      // For mobile iOS Safari support
+      inputElement.setSelectionRange(0, 9999);
+    }
+
     // Explicitly lock horizontal viewport scroll state
     const activePanel = document.querySelector('.view-panel.active');
     if (activePanel) activePanel.scrollLeft = 0;
@@ -1155,7 +1190,7 @@ function downloadHistoryCSV() {
   }
 
   // Construct CSV content headers
-  let csvContent = "Date,Day Label,Exercise Name,Set Number,Tag,Weight (kg),Reps,Reps In Reserve (RIR)\n";
+  let csvContent = "Date,Day Label,Exercise Name,Set Number,Tag,Weight (lbs),Reps,Reps In Reserve (RIR)\n";
 
   logs.forEach(log => {
     log.exercises.forEach(ex => {
