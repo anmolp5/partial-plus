@@ -312,9 +312,21 @@ function setupEventListeners() {
     startActiveWorkoutSession();
   });
 
-  // Swap Dropdown Listener
+  // Swap Dropdown visibility controller
   document.getElementById('swap-select').addEventListener('change', (e) => {
-    handleSwapTemplateChange(e.target.value);
+    const todayStr = getLocalDateString();
+    const currentTemplate = getAssignedTemplateDay(todayStr);
+    const swapBtn = document.getElementById('btn-swap-workout');
+    if (e.target.value !== currentTemplate) {
+      swapBtn.style.display = 'block';
+    } else {
+      swapBtn.style.display = 'none';
+    }
+  });
+
+  // Swap Button Action
+  document.getElementById('btn-swap-workout').addEventListener('click', () => {
+    handleSwapButtonClick();
   });
 
   // Card view navigator
@@ -390,17 +402,21 @@ function getWeekMonday(dateStr) {
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+// Get template day assigned to a weekday name for a given week Monday
+function getTemplateDayForWeekday(dayName, weekId) {
+  const weekSwapMap = state.weekSwaps[weekId];
+  if (weekSwapMap && weekSwapMap[dayName]) {
+    return weekSwapMap[dayName];
+  }
+  return dayName;
+}
+
 // Get templates assigned for a date, resolving custom swaps
 function getAssignedTemplateDay(dateStr) {
   const dateObj = new Date(dateStr + 'T00:00:00');
   const dayName = WEEKDAYS[dateObj.getDay()];
   const weekId = getWeekMonday(dateStr);
-
-  const weekSwapMap = state.weekSwaps[weekId];
-  if (weekSwapMap && weekSwapMap[dayName]) {
-    return weekSwapMap[dayName]; // Returns swapped template day (e.g. Saturday)
-  }
-  return dayName; // Defaults to normal week day
+  return getTemplateDayForWeekday(dayName, weekId);
 }
 
 // -------------------------------------------------------------
@@ -464,21 +480,24 @@ function renderTodayRoutineDetails(dateStr) {
   });
 
   const dayNamesOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  dayNamesOrder.forEach(day => {
-    const info = config[day];
+  dayNamesOrder.forEach(dayName => {
+    // Resolve what template is assigned to this dayName
+    const assignedTemplate = getTemplateDayForWeekday(dayName, weekId);
+    const info = config[assignedTemplate];
     const option = document.createElement('option');
-    option.value = day;
+    // The value represents the template day to swap to
+    option.value = assignedTemplate;
     
-    const label = info.isRest ? `${day} (Rest Day)` : `${day} (${info.label})`;
+    const label = info.isRest ? `${dayName} (Rest Day)` : `${dayName} (${info.label})`;
     option.textContent = label;
 
     // Select today's current mapped template
-    if (day === templateDay) {
+    if (assignedTemplate === templateDay) {
       option.selected = true;
     }
 
     // Disable if completed, EXCEPT if it's currently selected (completed but assigned here)
-    if (completedTemplates.has(day) && day !== templateDay) {
+    if (completedTemplates.has(assignedTemplate) && assignedTemplate !== templateDay) {
       option.disabled = true;
       option.textContent += ' [Completed]';
     }
@@ -503,13 +522,84 @@ function getWeekDaysList(mondayStr) {
 }
 
 // Dynamic Reciprocal Swap Handler
-function handleSwapTemplateChange(selectedTemplateDay) {
+async function handleSwapButtonClick() {
+  const swapSelect = document.getElementById('swap-select');
+  const swapBtn = document.getElementById('btn-swap-workout');
+  const selectedTemplate = swapSelect.value;
+  
+  // 1. Show loading state
+  swapBtn.disabled = true;
+  const originalHtml = swapBtn.innerHTML;
+  swapBtn.innerHTML = `<span class="spinner-icon">⏳</span> Swapping...`;
+  
+  // Simulated delay for loading presentation
+  await new Promise(resolve => setTimeout(resolve, 600));
+  
+  // 2. Validate swap
   const todayStr = getLocalDateString();
   const dateObj = new Date(todayStr + 'T00:00:00');
   const todayDayName = WEEKDAYS[dateObj.getDay()];
   const weekId = getWeekMonday(todayStr);
+  const currentTemplate = getAssignedTemplateDay(todayStr);
+  
+  // Check if today's workout was already logged in history
+  if (state.history[todayStr]) {
+    showSwapBanner("Swap invalid: Today's workout has already been completed.", true);
+    swapBtn.disabled = false;
+    swapBtn.innerHTML = originalHtml;
+    return;
+  }
+  
+  // Check if same template
+  if (selectedTemplate === currentTemplate) {
+    showSwapBanner("Swap invalid: Today is already assigned to this template.", true);
+    swapBtn.disabled = false;
+    swapBtn.innerHTML = originalHtml;
+    return;
+  }
+  
+  // Check if selected template was already completed this week on another day
+  const weekDays = getWeekDaysList(weekId);
+  const completedTemplates = new Set();
+  weekDays.forEach(wd => {
+    const log = state.history[wd.dateStr];
+    if (log && log.templateDay) {
+      completedTemplates.add(log.templateDay);
+    }
+  });
+  if (completedTemplates.has(selectedTemplate)) {
+    showSwapBanner("Swap invalid: This template has already been completed this week.", true);
+    swapBtn.disabled = false;
+    swapBtn.innerHTML = originalHtml;
+    return;
+  }
+  
+  // 3. Perform reciprocal swap
+  executeSwap(todayDayName, selectedTemplate, weekId);
+  
+  // 4. Success banner and hide button
+  showSwapBanner("Swap completed!", false);
+  swapBtn.disabled = false;
+  swapBtn.innerHTML = originalHtml;
+  swapBtn.style.display = 'none';
+}
 
-  // Initialize mapping if empty
+function showSwapBanner(message, isError) {
+  const banner = document.getElementById('swap-status-banner');
+  if (banner) {
+    banner.textContent = message;
+    banner.className = `status-banner ${isError ? 'error' : 'success'}`;
+    banner.style.display = 'block';
+    
+    if (window.swapBannerTimeout) clearTimeout(window.swapBannerTimeout);
+    
+    window.swapBannerTimeout = setTimeout(() => {
+      banner.style.display = 'none';
+    }, 4000);
+  }
+}
+
+function executeSwap(todayDayName, selectedTemplateDay, weekId) {
   if (!state.weekSwaps[weekId]) {
     state.weekSwaps[weekId] = {
       "Monday": "Monday",
@@ -523,11 +613,8 @@ function handleSwapTemplateChange(selectedTemplateDay) {
   }
 
   const currentSwaps = state.weekSwaps[weekId];
+  const currentTemplate = currentSwaps[todayDayName];
 
-  // Find template day originally assigned to today (before the new swap)
-  const currentTemplate = currentSwaps[todayDayName]; // e.g. Thursday (originally Rest)
-
-  // Find which weekday is currently mapping to the selected template day
   let weekdayToSwap = '';
   for (const [day, temp] of Object.entries(currentSwaps)) {
     if (temp === selectedTemplateDay) {
@@ -537,16 +624,14 @@ function handleSwapTemplateChange(selectedTemplateDay) {
   }
 
   if (weekdayToSwap) {
-    // Perform Reciprocal swap
     currentSwaps[todayDayName] = selectedTemplateDay;
     currentSwaps[weekdayToSwap] = currentTemplate;
     
-    // Save state
     if (state.auth.mode === 'user') {
       localStorage.setItem(KEYS.WEEK_SWAPS, JSON.stringify(state.weekSwaps));
     }
     
-    // Redraw
+    const todayStr = getLocalDateString();
     renderTodayRoutineDetails(todayStr);
     renderCalendar();
   }

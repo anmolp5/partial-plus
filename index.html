@@ -79,6 +79,9 @@
           ⚠️ Guest Mode: Volatile data will be cleared on refresh.
         </div>
         
+        <!-- Dynamic Swap Status Banner -->
+        <div id="swap-status-banner" class="status-banner" style="display:none;"></div>
+        
         <!-- Active Workout Card -->
         <div class="glass-card" id="today-routine-card">
           <h2 id="today-routine-label" style="margin-bottom:4px;">Day 5 - Lower</h2>
@@ -98,6 +101,7 @@
               <option value="Saturday" selected>Saturday (Day 5 - Lower)</option>
               <option value="Sunday">Sunday (Rest Day)</option>
             </select>
+            <button id="btn-swap-workout" class="btn btn-secondary" style="margin-top:8px; display:none; padding:10px 14px;">Swap Workout</button>
           </div>
           
           <button id="btn-start-workout" class="btn btn-start" style="margin-top:16px;">
