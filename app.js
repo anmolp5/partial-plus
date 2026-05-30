@@ -212,9 +212,40 @@ function setupEventListeners() {
     initDashboard();
   });
 
-  // Settings Panel Actions
-  document.getElementById('btn-open-config').addEventListener('click', () => {
+  // Hamburger Side Drawer Actions
+  document.getElementById('btn-hamburger').addEventListener('click', () => {
+    document.getElementById('side-drawer').classList.add('active');
+  });
+
+  document.getElementById('btn-close-drawer').addEventListener('click', () => {
+    document.getElementById('side-drawer').classList.remove('active');
+  });
+
+  document.getElementById('side-drawer').addEventListener('click', (e) => {
+    if (e.target.id === 'side-drawer') {
+      document.getElementById('side-drawer').classList.remove('active');
+    }
+  });
+
+  document.getElementById('btn-drawer-config').addEventListener('click', () => {
+    document.getElementById('side-drawer').classList.remove('active');
     openConfigPanel();
+  });
+
+  document.getElementById('btn-drawer-csv').addEventListener('click', () => {
+    document.getElementById('side-drawer').classList.remove('active');
+    downloadHistoryCSV();
+  });
+
+  document.getElementById('btn-drawer-logout').addEventListener('click', () => {
+    document.getElementById('side-drawer').classList.remove('active');
+    state.auth = { loggedIn: false, mode: 'user' };
+    localStorage.removeItem(KEYS.SESSION);
+    localStorage.removeItem(KEYS.ACTIVE_WORKOUT);
+    showView('login-view', 'backward');
+    document.getElementById('password-input').value = '';
+    document.getElementById('auth-form').classList.remove('active');
+    document.querySelector('.login-choices').style.display = 'flex';
   });
   
   document.getElementById('btn-close-config').addEventListener('click', () => {
@@ -269,10 +300,7 @@ function setupEventListeners() {
     renderCalendar();
   });
 
-  // CSV Downloader
-  document.getElementById('btn-download-csv').addEventListener('click', () => {
-    downloadHistoryCSV();
-  });
+
 
   // Start Workout Action
   document.getElementById('btn-start-workout').addEventListener('click', () => {
