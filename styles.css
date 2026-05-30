@@ -24,6 +24,7 @@
   --accent-violet: hsl(285, 90%, 75%);
   --accent-red: hsl(0, 84%, 60%);
   --accent-gold: hsl(45, 93%, 47%);
+  --accent-mint: hsl(150, 84%, 55%);
   
   /* Energizing Lavender gradients */
   --accent-gradient: linear-gradient(135deg, var(--accent-lavender), var(--accent-violet));
@@ -47,6 +48,12 @@
   padding: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+html, body {
+  overflow-x: hidden !important;
+  max-width: 100% !important;
+  width: 100vw;
 }
 
 body {
@@ -141,6 +148,11 @@ body {
   width: 100%;
   height: 100%;
   position: relative;
+}
+
+.iphone-frame, .app-container, .view-panel, .glass-card, .data-matrix {
+  overflow-x: hidden !important;
+  max-width: 100% !important;
 }
 
 .view-panel {
@@ -711,6 +723,19 @@ p {
   padding: 6px;
 }
 
+/* Optimize table row gaps for small screen iPhone profiles */
+@media (max-width: 500px) {
+  .matrix-row, .matrix-header {
+    gap: 4px !important;
+  }
+  .matrix-row {
+    padding: 4px !important;
+  }
+  .matrix-input {
+    padding: 8px 2px !important;
+  }
+}
+
 .set-number {
   text-align: center;
   font-size: 13px;
@@ -799,6 +824,14 @@ p {
   opacity: 0.3;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.nav-arrow-btn.cancel-style {
+  border-color: rgba(239, 71, 111, 0.25);
+  color: var(--accent-red);
+}
+.nav-arrow-btn.cancel-style:active {
+  background: rgba(239, 71, 111, 0.12);
 }
 
 /* -------------------------------------------------------------

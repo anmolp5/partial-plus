@@ -198,7 +198,11 @@
           <div class="config-section">
             <label for="webhook-url-input">Google Webhook Deployment URL:</label>
             <input type="text" id="webhook-url-input" class="form-input" style="margin-bottom:6px;" placeholder="https://script.google.com/macros/s/...">
-            <button id="btn-save-webhook" class="btn" style="margin-top:6px;">Save Webhook URL</button>
+            <div style="display:flex; gap:10px; margin-top:6px;">
+              <button id="btn-save-webhook" class="btn" style="flex:1;">Save Webhook URL</button>
+              <button id="btn-test-webhook" class="btn btn-secondary" style="flex:1;">Test Sync</button>
+            </div>
+            <div id="webhook-test-status" style="margin-top:8px; font-size:12px; font-weight:600; display:none;"></div>
           </div>
         </div>
         
@@ -238,6 +242,20 @@
           <div class="dialog-buttons">
             <button type="submit" value="cancel" class="btn btn-secondary" style="flex:1; padding:10px;">Cancel</button>
             <button type="submit" value="confirm" class="btn" style="flex:1; padding:10px;">End Session</button>
+          </div>
+        </form>
+      </dialog>
+      
+      <!-- Cancel Workout Confirmation Modal -->
+      <dialog id="confirm-cancel-modal">
+        <form method="dialog" class="dialog-content">
+          <div class="dialog-header">Cancel Workout?</div>
+          <div class="dialog-body">
+            Are you sure you want to cancel today's workout? All current progress will be lost and discarded.
+          </div>
+          <div class="dialog-buttons">
+            <button type="submit" value="cancel" class="btn btn-secondary" style="flex:1; padding:10px;">No, Keep Tracking</button>
+            <button type="submit" value="confirm" class="btn btn-danger" style="flex:1; padding:10px;">Yes, Cancel Workout</button>
           </div>
         </form>
       </dialog>

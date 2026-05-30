@@ -319,6 +319,9 @@ function setupEventListeners() {
       saveActiveWorkoutState();
       showView('workout-view', 'backward');
       renderActiveCard();
+    } else {
+      const dialog = document.getElementById('confirm-cancel-modal');
+      dialog.showModal();
     }
   });
 
@@ -340,7 +343,27 @@ function setupEventListeners() {
     editHistoricalWorkout();
   });
 
+  // Prevent any horizontal scrolling on panels
+  document.querySelectorAll('.view-panel').forEach(panel => {
+    panel.addEventListener('scroll', () => {
+      if (panel.scrollLeft !== 0) {
+        panel.scrollLeft = 0;
+      }
+    });
+  });
 
+  // Cancel Workout Modal handler
+  const confirmCancelDialog = document.getElementById('confirm-cancel-modal');
+  confirmCancelDialog.addEventListener('close', () => {
+    if (confirmCancelDialog.returnValue === 'confirm') {
+      cancelActiveWorkoutSession();
+    }
+  });
+
+  // Test Webhook click handler
+  document.getElementById('btn-test-webhook').addEventListener('click', () => {
+    testWebhookSync();
+  });
 }
 
 // -------------------------------------------------------------
@@ -757,7 +780,15 @@ function renderActiveCard() {
   const prevBtn = document.getElementById('btn-prev-exercise');
   const nextBtn = document.getElementById('btn-next-exercise');
 
-  prevBtn.disabled = index === 0;
+  if (index === 0) {
+    prevBtn.textContent = 'Cancel Workout';
+    prevBtn.disabled = false;
+    prevBtn.classList.add('cancel-style');
+  } else {
+    prevBtn.textContent = '◀ Prev';
+    prevBtn.disabled = false;
+    prevBtn.classList.remove('cancel-style');
+  }
 
   if (index === wk.exercises.length - 1) {
     nextBtn.textContent = wk.isEditingHistorical ? 'Save Changes' : 'End Workout';
@@ -793,7 +824,14 @@ function handleInputFocus(inputElement) {
   // Dynamic Scroll centering to keep inputs above viewport safe areas
   // Wait short delay for iOS softkeyboard layout transition
   setTimeout(() => {
-    inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const row = inputElement.closest('.matrix-row') || inputElement;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    
+    // Explicitly lock horizontal viewport scroll state
+    const activePanel = document.querySelector('.view-panel.active');
+    if (activePanel) activePanel.scrollLeft = 0;
+    document.documentElement.scrollLeft = 0;
+    document.body.scrollLeft = 0;
   }, 100);
 }
 
@@ -845,6 +883,94 @@ function handleCardNextAction() {
     }
 
     dialog.showModal();
+  }
+}
+
+function cancelActiveWorkoutSession() {
+  // Clear recovery memory
+  localStorage.removeItem(KEYS.ACTIVE_WORKOUT);
+
+  // Reset active workout state
+  state.activeWorkout = {
+    date: '',
+    dayOfWeek: '',
+    dayLabel: '',
+    templateDay: '',
+    exercises: [],
+    isActive: false,
+    currentExerciseIndex: 0,
+    isEditingHistorical: false,
+    editDate: ''
+  };
+
+  showView('dashboard-view', 'backward');
+  initDashboard();
+}
+
+async function testWebhookSync() {
+  const urlInput = document.getElementById('webhook-url-input');
+  const statusDiv = document.getElementById('webhook-test-status');
+  const url = urlInput.value.trim();
+
+  if (!url || url.includes('YOUR_APPS_SCRIPT_ID')) {
+    statusDiv.style.display = 'block';
+    statusDiv.style.color = 'var(--accent-red)';
+    statusDiv.textContent = '❌ Please enter your valid Google Apps Script URL first.';
+    return;
+  }
+
+  statusDiv.style.display = 'block';
+  statusDiv.style.color = 'var(--accent-lavender)';
+  statusDiv.textContent = '⏳ Sending connection test payload...';
+
+  const testPayload = {
+    action: 'log_workout',
+    payload: [
+      {
+        date: new Date().toISOString().split('T')[0],
+        dayLabel: 'Test Connection',
+        exercise: 'Webhook Verification Set',
+        setNumber: 1,
+        tag: 'Base',
+        weight: '999',
+        reps: '999',
+        rir: '999'
+      }
+    ]
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(testPayload)
+    });
+
+    if (response.ok || response.status === 200) {
+      statusDiv.style.color = 'var(--accent-mint)';
+      statusDiv.textContent = '✅ Sync Successful! Test row appended to Google Sheet.';
+    } else {
+      throw new Error(`Google Sheets Webhook returned error code: ${response.status}`);
+    }
+  } catch (corsErr) {
+    console.warn("Direct CORS check failed. Trying fallback request...", corsErr);
+    try {
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(testPayload)
+      });
+      statusDiv.style.color = 'var(--accent-gold)';
+      statusDiv.textContent = '⚠️ Dispatched (opaque mode). Please verify your Google Sheet!';
+    } catch (fallbackErr) {
+      statusDiv.style.color = 'var(--accent-red)';
+      statusDiv.textContent = `❌ Sync Failed: ${fallbackErr.message || fallbackErr}`;
+    }
   }
 }
 
