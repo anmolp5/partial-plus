@@ -34,12 +34,27 @@ const KEYS = {
 // Current Calendar Month display state
 let currentCalDate = new Date();
 
+// Stopwatch & Lap Timer State
+let stopwatchInterval = null;
+let stopwatchStartTime = null;   // Date.now() when workout started
+let lapStartTime = null;         // Date.now() when current lap started
+
 
 
 // -------------------------------------------------------------
 // Initialization & Routing Engine
 // -------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
+  // TEMP: Clear today's workout for testing
+  const tmpH = JSON.parse(localStorage.getItem('partial_plus_history') || '{}');
+  const tmpToday = new Date();
+  const tmpOffset = tmpToday.getTimezoneOffset();
+  const tmpLocal = new Date(tmpToday.getTime() - (tmpOffset*60*1000));
+  const tmpDateStr = tmpLocal.toISOString().split('T')[0];
+  delete tmpH[tmpDateStr];
+  localStorage.setItem('partial_plus_history', JSON.stringify(tmpH));
+  // END TEMP
+
   initPWA();
   loadStateFromStorage();
   setupEventListeners();
@@ -109,6 +124,12 @@ function routeToInitialView() {
           showView('workout-view');
           renderActiveCard();
           updateProfileTag();
+          // Restore stopwatch from saved start time
+          if (recovered.stopwatchStartTime) {
+            startStopwatch(recovered.stopwatchStartTime, recovered.lapStartTime);
+          } else {
+            startStopwatch();
+          }
           return;
         }
       } catch (e) {
@@ -375,6 +396,11 @@ function setupEventListeners() {
     if (confirmCancelDialog.returnValue === 'confirm') {
       cancelActiveWorkoutSession();
     }
+  });
+
+  // Lap Button
+  document.getElementById('btn-lap').addEventListener('click', () => {
+    handleLapButton();
   });
 
   // Test Webhook click handler
@@ -819,6 +845,7 @@ function startActiveWorkoutSession() {
     })
   };
 
+  startStopwatch();
   saveActiveWorkoutState();
   showView('workout-view');
   renderActiveCard();
@@ -839,8 +866,106 @@ function isFailureSet(tag, setIndex) {
 // Save active session status for crash recovery
 function saveActiveWorkoutState() {
   if (state.auth.mode === 'user') {
-    localStorage.setItem(KEYS.ACTIVE_WORKOUT, JSON.stringify(state.activeWorkout));
+    // Persist stopwatch start time for crash recovery
+    const saveData = { ...state.activeWorkout };
+    if (stopwatchStartTime) {
+      saveData.stopwatchStartTime = stopwatchStartTime;
+    }
+    if (lapStartTime) {
+      saveData.lapStartTime = lapStartTime;
+    }
+    localStorage.setItem(KEYS.ACTIVE_WORKOUT, JSON.stringify(saveData));
   }
+}
+
+// -------------------------------------------------------------
+// Stopwatch & Lap Timer Engine
+// -------------------------------------------------------------
+function startStopwatch(savedStartTime, savedLapStartTime) {
+  // Clear any existing interval
+  if (stopwatchInterval) clearInterval(stopwatchInterval);
+  
+  stopwatchStartTime = savedStartTime || Date.now();
+  lapStartTime = savedLapStartTime || Date.now();
+  
+  updateStopwatchDisplay();
+  updateLapDisplay();
+  
+  stopwatchInterval = setInterval(() => {
+    updateStopwatchDisplay();
+    updateLapDisplay();
+  }, 100);
+}
+
+function stopStopwatch() {
+  if (stopwatchInterval) {
+    clearInterval(stopwatchInterval);
+    stopwatchInterval = null;
+  }
+  stopwatchStartTime = null;
+  lapStartTime = null;
+  
+  // Reset displays
+  const stopwatchEl = document.getElementById('stopwatch-display');
+  const lapEl = document.getElementById('lap-time');
+  if (stopwatchEl) stopwatchEl.textContent = '00:00';
+  if (lapEl) lapEl.textContent = '00:00';
+}
+
+function formatElapsed(ms) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  
+  const pad = (n) => String(n).padStart(2, '0');
+  
+  if (hours > 0) {
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  }
+  return `${pad(minutes)}:${pad(seconds)}`;
+}
+
+function updateStopwatchDisplay() {
+  if (!stopwatchStartTime) return;
+  const elapsed = Date.now() - stopwatchStartTime;
+  const el = document.getElementById('stopwatch-display');
+  if (el) el.textContent = formatElapsed(elapsed);
+}
+
+function updateLapDisplay() {
+  if (!lapStartTime) return;
+  const elapsed = Date.now() - lapStartTime;
+  const el = document.getElementById('lap-time');
+  if (el) el.textContent = formatElapsedWithTenths(elapsed);
+}
+
+function formatElapsedWithTenths(ms) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const tenths = Math.floor((ms % 1000) / 100);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  
+  const pad = (n) => String(n).padStart(2, '0');
+  
+  if (hours > 0) {
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${tenths}`;
+  }
+  return `${pad(minutes)}:${pad(seconds)}.${tenths}`;
+}
+
+function handleLapButton() {
+  // Reset lap timer
+  lapStartTime = Date.now();
+  updateLapDisplay();
+  saveActiveWorkoutState();
+  
+  // Flash animation on button
+  const btn = document.getElementById('btn-lap');
+  btn.classList.remove('flash');
+  void btn.offsetWidth; // trigger reflow
+  btn.classList.add('flash');
 }
 
 // -------------------------------------------------------------
@@ -858,6 +983,17 @@ function renderActiveCard() {
   const dateObj = new Date(wk.date + 'T00:00:00');
   const fmtDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   document.getElementById('workout-view-date').textContent = fmtDate;
+
+  // Show/hide stopwatch & lap timer (hidden during edit sessions)
+  const stopwatchEl = document.getElementById('stopwatch-display');
+  const lapBar = document.getElementById('lap-timer-bar');
+  if (wk.isEditingHistorical) {
+    stopwatchEl.style.display = 'none';
+    lapBar.style.display = 'none';
+  } else {
+    stopwatchEl.style.display = 'block';
+    lapBar.style.display = 'flex';
+  }
 
   // Progress Bar
   const progressPercent = Math.round(((index) / wk.exercises.length) * 100);
@@ -1063,6 +1199,9 @@ function handleCardNextAction() {
 }
 
 function cancelActiveWorkoutSession() {
+  // Stop stopwatch
+  stopStopwatch();
+
   // Clear recovery memory
   localStorage.removeItem(KEYS.ACTIVE_WORKOUT);
 
@@ -1151,6 +1290,9 @@ async function testWebhookSync() {
 // 5. Conclude Workout Session & Webhook Pipeline
 // -------------------------------------------------------------
 async function concludeWorkoutSession() {
+  // Stop stopwatch
+  stopStopwatch();
+
   const wk = state.activeWorkout;
 
   // Structure complete log entry

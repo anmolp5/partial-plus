@@ -646,6 +646,15 @@ p {
   border-bottom: 1px solid var(--border-glass);
 }
 
+.workout-header > * {
+  flex: 1;
+}
+
+.workout-header > *:last-child {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .workout-header h3 {
   font-size: 13px;
   color: var(--text-muted);
@@ -666,6 +675,86 @@ p {
   background: var(--accent-gradient);
   width: 0%;
   transition: width 0.3s ease;
+}
+
+/* Stopwatch Display */
+.stopwatch-display {
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 1px;
+  text-shadow: 0 0 12px rgba(191, 155, 254, 0.35);
+  min-width: 70px;
+  text-align: center;
+}
+
+/* Lap Timer Bar */
+.lap-timer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+}
+
+.lap-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lap-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+
+.lap-time {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent-lavender);
+  letter-spacing: 0.5px;
+}
+
+.btn-lap {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1.5px solid rgba(191, 155, 254, 0.4);
+  background: rgba(191, 155, 254, 0.1);
+  color: var(--accent-lavender);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-lap:active {
+  transform: scale(0.95);
+  background: rgba(191, 155, 254, 0.3);
+}
+
+.btn-lap.flash {
+  animation: lap-flash 0.3s ease;
+}
+
+@keyframes lap-flash {
+  0% { background: rgba(191, 155, 254, 0.1); }
+  50% { background: rgba(191, 155, 254, 0.35); }
+  100% { background: rgba(191, 155, 254, 0.1); }
 }
 
 .exercise-meta {
