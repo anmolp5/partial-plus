@@ -340,17 +340,7 @@ function setupEventListeners() {
     editHistoricalWorkout();
   });
 
-  // Input accessory buttons listeners
-  document.getElementById('btn-accessory-prev').addEventListener('click', () => {
-    focusAdjacentInput(-1);
-  });
-  document.getElementById('btn-accessory-next').addEventListener('click', () => {
-    focusAdjacentInput(1);
-  });
-  document.getElementById('btn-accessory-done').addEventListener('click', () => {
-    const activeEl = document.activeElement;
-    if (activeEl) activeEl.blur();
-  });
+
 }
 
 // -------------------------------------------------------------
@@ -578,7 +568,8 @@ function renderCalendar() {
 
   // 3. Render next month overhang days (pad grid to multiples of 7)
   const totalCells = startCol + daysInMonth;
-  const nextMonthCells = 42 - totalCells; // Standard 6-row grid
+  const targetCells = totalCells <= 28 ? 28 : (totalCells <= 35 ? 35 : 42); // Dynamic 4, 5 or 6 row grid to save screen space
+  const nextMonthCells = targetCells - totalCells;
   for (let i = 1; i <= nextMonthCells; i++) {
     const nextDate = new Date(year, month + 1, i);
     createDayCell(nextDate, true);
@@ -798,15 +789,7 @@ function handleInputValueChange(setIndex, element) {
   saveActiveWorkoutState();
 }
 
-let accessoryBarTimer = null;
-
 function handleInputFocus(inputElement) {
-  // Clear hide timers for bar
-  if (accessoryBarTimer) clearTimeout(accessoryBarTimer);
-
-  const bar = document.getElementById('keyboard-accessory');
-  bar.classList.add('active');
-
   // Dynamic Scroll centering to keep inputs above viewport safe areas
   // Wait short delay for iOS softkeyboard layout transition
   setTimeout(() => {
@@ -815,11 +798,7 @@ function handleInputFocus(inputElement) {
 }
 
 function handleInputBlur() {
-  // Use short delay to prevent bar blinking during tab jumps
-  accessoryBarTimer = setTimeout(() => {
-    const bar = document.getElementById('keyboard-accessory');
-    bar.classList.remove('active');
-  }, 150);
+  // Intentionally left blank
 }
 
 // Focus Jumping
