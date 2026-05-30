@@ -175,6 +175,11 @@ body {
   display: flex;
 }
 
+#dashboard-view {
+  padding-bottom: calc(var(--safe-bottom) + 14px) !important;
+  overflow: hidden !important;
+}
+
 /* Scrollbar styles optimized for Safari */
 .view-panel::-webkit-scrollbar {
   width: 4px;
