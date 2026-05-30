@@ -34,6 +34,9 @@ const KEYS = {
 // Current Calendar Month display state
 let currentCalDate = new Date();
 
+// Keep track of the last scrolled row to avoid bounces on focus jump within the same row
+let lastScrolledRow = null;
+
 // -------------------------------------------------------------
 // Initialization & Routing Engine
 // -------------------------------------------------------------
@@ -146,17 +149,20 @@ function showView(viewId, direction = 'forward') {
 
 function updateProfileTag() {
   const tag = document.getElementById('profile-tag');
+  const configBtn = document.getElementById('btn-drawer-config');
   if (tag) {
     if (state.auth.mode === 'guest') {
       tag.textContent = 'Guest Mode (Demo)';
       tag.style.background = 'rgba(252, 163, 17, 0.15)';
       tag.style.color = 'var(--accent-gold)';
       document.getElementById('guest-banner').style.display = 'block';
+      if (configBtn) configBtn.style.display = 'none';
     } else {
       tag.textContent = 'Active Lifter';
       tag.style.background = 'rgba(6, 214, 160, 0.1)';
       tag.style.color = 'var(--accent-mint)';
       document.getElementById('guest-banner').style.display = 'none';
+      if (configBtn) configBtn.style.display = 'flex';
     }
   }
 }
@@ -702,6 +708,7 @@ function saveActiveWorkoutState() {
 // Render Card Details
 // -------------------------------------------------------------
 function renderActiveCard() {
+  lastScrolledRow = null; // Reset row scroll tracker for this card view render
   const wk = state.activeWorkout;
   const index = wk.currentExerciseIndex;
   const ex = wk.exercises[index];
@@ -847,11 +854,15 @@ function handleInputValueChange(setIndex, element) {
 }
 
 function handleInputFocus(inputElement) {
-  // Dynamic Scroll centering to keep inputs above viewport safe areas
+  const row = inputElement.closest('.matrix-row') || inputElement;
+  
   // Wait short delay for iOS softkeyboard layout transition
   setTimeout(() => {
-    const row = inputElement.closest('.matrix-row') || inputElement;
-    row.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    // Only scroll into view if focus jumps to a different row to prevent jiggling/bouncing between cells of the same row
+    if (row !== lastScrolledRow) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+      lastScrolledRow = row;
+    }
     
     // Select all text in input to allow instant overwriting
     if (typeof inputElement.select === 'function') {
@@ -1041,7 +1052,9 @@ async function concludeWorkoutSession() {
     localStorage.removeItem(KEYS.ACTIVE_WORKOUT);
   } else {
     // Guest Mode - volatile storage
-    alert("Guest Mode Sandbox: Mock sync fired. Data not permanently recorded.");
+    if (confirm("Workout complete! Guest Mode data is volatile and will clear on refresh.\n\nWould you like to download this workout session as a CSV file?")) {
+      downloadSingleWorkoutCSV(workoutRecord);
+    }
   }
 
   // Clear active state properties
@@ -1208,6 +1221,28 @@ function downloadHistoryCSV() {
   
   link.setAttribute("href", url);
   link.setAttribute("download", `partial_plus_training_history_${getLocalDateString()}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function downloadSingleWorkoutCSV(record) {
+  let csvContent = "Date,Day Label,Exercise Name,Set Number,Tag,Weight (lbs),Reps,Reps In Reserve (RIR)\n";
+  record.exercises.forEach(ex => {
+    ex.setData.forEach((set, i) => {
+      const escapedName = ex.name.replace(/"/g, '""');
+      csvContent += `"${record.date}","${record.dayLabel}","${escapedName}",${i+1},"${ex.tag}",${set.weight || 0},${set.reps || 0},${set.rir || 0}\n`;
+    });
+  });
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  
+  link.setAttribute("href", url);
+  link.setAttribute("download", `partial_plus_guest_workout_${record.date}.csv`);
   link.style.visibility = 'hidden';
   
   document.body.appendChild(link);
