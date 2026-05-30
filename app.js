@@ -34,8 +34,7 @@ const KEYS = {
 // Current Calendar Month display state
 let currentCalDate = new Date();
 
-// Keep track of the last scrolled row to avoid bounces on focus jump within the same row
-let lastScrolledRow = null;
+
 
 // -------------------------------------------------------------
 // Initialization & Routing Engine
@@ -152,7 +151,7 @@ function updateProfileTag() {
   const configBtn = document.getElementById('btn-drawer-config');
   if (tag) {
     if (state.auth.mode === 'guest') {
-      tag.textContent = 'Guest Mode (Demo)';
+      tag.textContent = 'Guest Mode';
       tag.style.background = 'rgba(252, 163, 17, 0.15)';
       tag.style.color = 'var(--accent-gold)';
       document.getElementById('guest-banner').style.display = 'block';
@@ -708,7 +707,6 @@ function saveActiveWorkoutState() {
 // Render Card Details
 // -------------------------------------------------------------
 function renderActiveCard() {
-  lastScrolledRow = null; // Reset row scroll tracker for this card view render
   const wk = state.activeWorkout;
   const index = wk.currentExerciseIndex;
   const ex = wk.exercises[index];
@@ -854,16 +852,8 @@ function handleInputValueChange(setIndex, element) {
 }
 
 function handleInputFocus(inputElement) {
-  const row = inputElement.closest('.matrix-row') || inputElement;
-  
   // Wait short delay for iOS softkeyboard layout transition
   setTimeout(() => {
-    // Only scroll into view if focus jumps to a different row to prevent jiggling/bouncing between cells of the same row
-    if (row !== lastScrolledRow) {
-      row.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-      lastScrolledRow = row;
-    }
-    
     // Select all text in input to allow instant overwriting
     if (typeof inputElement.select === 'function') {
       inputElement.select();
