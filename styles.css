@@ -1,0 +1,1032 @@
+/* -------------------------------------------------------------
+ * partial+ Design System & Stylesheet
+ * Premium, glassmorphic, Black & Lavender Theme optimized for iOS 18+
+ * Exclusively tuned for iPhone 16 Pro (402 x 874 pt) in Safari
+ * ------------------------------------------------------------- */
+
+/* Import Outfit Google Font */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Ultra-Premium Obsidian Black Backgrounds */
+  --bg-obsidian: #000000;
+  --bg-app: #030303;
+  --bg-card: rgba(18, 18, 22, 0.78);
+  --bg-input: rgba(12, 12, 16, 0.95);
+  
+  /* Lavender glass border accents */
+  --border-glass: rgba(191, 155, 254, 0.12);
+  --border-glow: rgba(191, 155, 254, 0.45);
+  
+  /* Black & Lavender Accent Palette */
+  --accent-lavender: hsl(260, 95%, 78%);
+  --accent-lavender-dark: hsl(260, 60%, 15%);
+  --accent-violet: hsl(285, 90%, 75%);
+  --accent-red: hsl(0, 84%, 60%);
+  --accent-gold: hsl(45, 93%, 47%);
+  
+  /* Energizing Lavender gradients */
+  --accent-gradient: linear-gradient(135deg, var(--accent-lavender), var(--accent-violet));
+  --accent-red-gradient: linear-gradient(135deg, var(--accent-red), hsl(350, 80%, 50%));
+  
+  /* Text with optimized high contrast on deep black background */
+  --text-primary: #ffffff;
+  --text-secondary: hsl(260, 15%, 85%);
+  --text-muted: hsl(260, 10%, 65%);
+  --text-dim: hsl(260, 10%, 45%);
+  
+  /* Layout constraints for iPhone 16 Pro (using env safe areas for notch/island & home bar) */
+  --safe-top: env(safe-area-inset-top, 59px); 
+  --safe-bottom: env(safe-area-inset-bottom, 34px);
+}
+
+/* Global Reset */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-obsidian);
+  color: var(--text-primary);
+  overflow: hidden;
+  height: 100dvh; /* Resilient dynamic viewport height to prevent Safari top/bottom bars clip */
+  width: 100vw;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* -------------------------------------------------------------
+ * Responsive Viewport Mockup (iPhone Frame on Desktop)
+ * ------------------------------------------------------------- */
+@media (min-width: 500px) {
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle at top right, hsl(260, 20%, 8%), #030303 65%);
+  }
+  
+  .iphone-frame {
+    position: relative;
+    width: 402px; /* iPhone 16 Pro Viewport width */
+    height: 874px; /* iPhone 16 Pro Viewport height */
+    border: 12px solid #202025;
+    border-radius: 54px; /* Curved viewport bezel */
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.95),
+                0 0 0 1px rgba(191, 155, 254, 0.15);
+    background-color: var(--bg-app);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Dynamic Island Mockup */
+  .iphone-frame::before {
+    content: '';
+    position: absolute;
+    top: 13px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 29px;
+    background-color: #000000;
+    border-radius: 20px;
+    z-index: 1000;
+    box-shadow: inset 0 0 4px rgba(255, 255, 255, 0.15);
+  }
+
+  /* Home Indicator Bar */
+  .iphone-frame::after {
+    content: '';
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 134px;
+    height: 5px;
+    background-color: rgba(255, 255, 255, 0.35);
+    border-radius: 10px;
+    z-index: 1000;
+  }
+}
+
+@media (max-width: 499px) {
+  .iphone-frame {
+    position: relative;
+    width: 100%;
+    height: 100dvh; /* Safari address bar height resilience */
+    background-color: var(--bg-obsidian);
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* Hide Bezel Emulator on native mobile screens */
+  .iphone-frame::before {
+    display: none;
+  }
+}
+
+/* -------------------------------------------------------------
+ * Main Views Containers
+ * ------------------------------------------------------------- */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.view-panel {
+  display: none; /* Controlled by routing */
+  flex-direction: column;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Added bottom padding calc: var(--safe-bottom) + 95px to ensure inputs aren't obscured under the floating bar */
+  padding: calc(var(--safe-top) + 14px) 16px calc(var(--safe-bottom) + 95px) 16px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  -webkit-overflow-scrolling: touch; /* Butter-smooth scrolling on Safari */
+}
+
+.view-panel.active {
+  display: flex;
+}
+
+/* Scrollbar styles optimized for Safari */
+.view-panel::-webkit-scrollbar {
+  width: 4px;
+}
+.view-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+.view-panel::-webkit-scrollbar-thumb {
+  background: rgba(191, 155, 254, 0.2);
+  border-radius: 10px;
+}
+
+/* -------------------------------------------------------------
+ * Common UI Components & Glassmorphism
+ * ------------------------------------------------------------- */
+.glass-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-glass);
+  border-radius: 22px;
+  padding: 18px;
+  margin-bottom: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s;
+}
+
+.glass-card:active {
+  transform: scale(0.99);
+}
+
+h1 {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 4px;
+}
+
+h2 {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #000000;
+  background: var(--accent-gradient);
+  border: none;
+  border-radius: 14px;
+  padding: 13px 18px;
+  cursor: pointer;
+  width: 100%;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s, opacity 0.2s;
+  box-shadow: 0 4px 16px rgba(191, 155, 254, 0.25);
+  text-decoration: none;
+}
+
+.btn:active {
+  transform: scale(0.96);
+  opacity: 0.9;
+}
+
+.btn-secondary {
+  background: rgba(191, 155, 254, 0.08);
+  border: 1px solid var(--border-glass);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+.btn-secondary:active {
+  background: rgba(191, 155, 254, 0.16);
+}
+
+.btn-danger {
+  background: var(--accent-red-gradient);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(239, 71, 111, 0.2);
+}
+
+.btn:disabled {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  box-shadow: none;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Pulsing Start Workout Button */
+.btn-start {
+  animation: pulse-glow-lavender 2.5s infinite;
+}
+
+@keyframes pulse-glow-lavender {
+  0%, 100% {
+    box-shadow: 0 4px 12px rgba(191, 155, 254, 0.2);
+  }
+  50% {
+    box-shadow: 0 4px 22px rgba(191, 155, 254, 0.55);
+  }
+}
+
+/* Inputs */
+.form-input {
+  font-family: inherit;
+  font-size: 15px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  color: var(--text-primary);
+  padding: 11px 15px;
+  width: 100%;
+  margin-top: 6px;
+  margin-bottom: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--accent-lavender);
+  box-shadow: 0 0 10px rgba(191, 155, 254, 0.25);
+}
+
+/* -------------------------------------------------------------
+ * 1. Login View
+ * ------------------------------------------------------------- */
+#login-view {
+  justify-content: center;
+  align-items: center;
+  background: radial-gradient(circle at bottom left, rgba(191, 155, 254, 0.06), transparent 70%),
+              radial-gradient(circle at top right, rgba(191, 155, 254, 0.06), transparent 70%),
+              var(--bg-app);
+}
+
+.logo-container {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.logo-icon {
+  font-size: 56px;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: inline-block;
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.login-choices {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-form-card {
+  width: 100%;
+  display: none;
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.auth-form-card.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.passcode-wrapper {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 14px;
+}
+
+.shake {
+  animation: shake-anim 0.4s ease-in-out;
+}
+
+@keyframes shake-anim {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+/* -------------------------------------------------------------
+ * 2. Dashboard View & Calendar Widget
+ * ------------------------------------------------------------- */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.profile-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(191, 155, 254, 0.1);
+  border: 1px solid var(--border-glass);
+  color: var(--accent-lavender);
+}
+
+/* GitHub Link in Header */
+.github-link {
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, transform 0.2s;
+  padding: 4px;
+}
+
+.github-link:active {
+  color: var(--accent-lavender);
+  transform: scale(0.95);
+}
+
+.demo-banner {
+  background: rgba(252, 163, 17, 0.12);
+  border: 1px solid rgba(252, 163, 17, 0.25);
+  color: var(--accent-gold);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  padding: 8px 12px;
+  border-radius: 10px;
+  margin-bottom: 14px;
+  animation: fadeIn 0.3s;
+}
+
+.today-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.date-indicator {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.swap-dropdown-container {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.swap-dropdown-container label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.dropdown-select {
+  font-family: inherit;
+  font-size: 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-glass);
+  color: var(--text-primary);
+  padding: 10px 14px;
+  border-radius: 12px;
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg fill='rgb(191, 155, 254)' height='24' viewBox='0 0 24 24' width='24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z'/><path d='M0 0h24v24H0z' fill='none'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.dropdown-select:focus {
+  border-color: var(--accent-lavender);
+}
+
+/* Calendar Widget style */
+.calendar-section {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.calendar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.calendar-nav-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 15px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  text-align: center;
+}
+
+.calendar-day-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.calendar-day {
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.calendar-day:active {
+  background-color: rgba(191, 155, 254, 0.15);
+}
+
+.calendar-day.today {
+  border: 1.5px dashed var(--accent-lavender);
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.calendar-day.completed {
+  background: var(--accent-gradient);
+  color: #000000;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(191, 155, 254, 0.3);
+}
+
+.calendar-day.other-month {
+  color: var(--text-dim);
+}
+
+/* History logs list below calendar */
+.history-shortcuts {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-item-bar {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.history-item-bar span {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.history-item-bar .badge {
+  font-size: 10px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: rgba(191, 155, 254, 0.15);
+  color: var(--accent-lavender);
+  font-weight: 600;
+}
+
+/* Utilities row */
+.dashboard-utilities {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 6px;
+  margin-bottom: 18px;
+}
+
+/* -------------------------------------------------------------
+ * 3. Card-Based Workout View
+ * ------------------------------------------------------------- */
+.workout-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.workout-header h3 {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.workout-progress-bar {
+  height: 4px;
+  width: 90px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.workout-progress-fill {
+  height: 100%;
+  background: var(--accent-gradient);
+  width: 0%;
+  transition: width 0.3s ease;
+}
+
+.exercise-meta {
+  margin-bottom: 16px;
+}
+
+.exercise-name {
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.exercise-badges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tag-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 6px;
+  text-transform: uppercase;
+}
+
+.tag-badge.hc {
+  background: rgba(239, 71, 111, 0.15);
+  color: var(--accent-red);
+  border: 1px solid rgba(239, 71, 111, 0.3);
+}
+
+.tag-badge.llp {
+  background: rgba(191, 155, 254, 0.15);
+  color: var(--accent-lavender);
+  border: 1px solid rgba(191, 155, 254, 0.3);
+}
+
+.tag-badge.base {
+  background: rgba(252, 163, 17, 0.15);
+  color: var(--accent-gold);
+  border: 1px solid rgba(252, 163, 17, 0.3);
+}
+
+.muscle-badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+
+/* Input Matrix Table */
+.data-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.matrix-header {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr 1fr 1fr;
+  text-align: center;
+  align-items: center;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.matrix-header span {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.matrix-row {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr 1fr 1fr;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.015);
+  border-radius: 12px;
+  padding: 6px;
+}
+
+.set-number {
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.matrix-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.matrix-input {
+  width: 100%;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-glass);
+  border-radius: 9px;
+  padding: 8px 4px;
+  text-align: center;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+  /* Prevent default iOS Safari zoom on input focus (Safari zooms if font-size < 16px) */
+  font-size: 16px; 
+}
+
+.matrix-input:focus {
+  outline: none;
+  border-color: var(--accent-lavender);
+  background: rgba(191, 155, 254, 0.05);
+  box-shadow: inset 0 0 4px rgba(191, 155, 254, 0.2), 0 0 10px rgba(191, 155, 254, 0.15);
+}
+
+.matrix-input:disabled {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: transparent;
+  color: var(--text-dim);
+  font-weight: 400;
+  cursor: not-allowed;
+}
+
+/* Failure tag lock icon visual */
+.matrix-input-wrapper.locked::after {
+  content: '🔒';
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* Card bottom navigation */
+.card-navigation {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 14px;
+}
+
+.nav-arrow-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-glass);
+  color: var(--text-primary);
+  padding: 12px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+
+.nav-arrow-btn:active {
+  background: rgba(191, 155, 254, 0.12);
+}
+
+.nav-arrow-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------
+ * Dynamic Keyboard Input Accessory Bar (Position Fixed to Bottom env)
+ * ------------------------------------------------------------- */
+.input-accessory-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: #09090b;
+  border-top: 1px solid rgba(191, 155, 254, 0.18);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  /* Add safe area bottom padding to keep it above iPhone 16 Pro Home Bar */
+  padding: 10px 16px calc(10px + var(--safe-bottom)) 16px;
+  z-index: 1100;
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6);
+  transform: translateY(100%);
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.input-accessory-bar.active {
+  transform: translateY(0);
+}
+
+.accessory-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.accessory-btn {
+  background: rgba(191, 155, 254, 0.08);
+  border: 1px solid var(--border-glass);
+  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.accessory-btn:active {
+  background: rgba(191, 155, 254, 0.18);
+}
+
+.accessory-btn-done {
+  background: var(--accent-gradient);
+  color: #000000;
+  border: none;
+}
+
+/* Helper to center content when keyboard pops up */
+.focused-container-center {
+  scroll-margin-bottom: 220px;
+}
+
+/* -------------------------------------------------------------
+ * 4. Configuration View
+ * ------------------------------------------------------------- */
+.config-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.config-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.config-section label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.json-textarea {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  color: var(--accent-lavender);
+  padding: 12px;
+  width: 100%;
+  height: 290px;
+  resize: none;
+  line-height: 1.4;
+}
+
+.json-textarea:focus {
+  outline: none;
+  border-color: var(--accent-lavender);
+  box-shadow: 0 0 10px rgba(191, 155, 254, 0.2);
+}
+
+.validation-indicator {
+  font-size: 11px;
+  font-weight: 600;
+  display: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-top: -6px;
+  margin-bottom: 10px;
+}
+
+.validation-indicator.success {
+  display: block;
+  background: rgba(191, 155, 254, 0.1);
+  color: var(--accent-lavender);
+}
+
+.validation-indicator.error {
+  display: block;
+  background: rgba(239, 71, 111, 0.1);
+  color: var(--accent-red);
+}
+
+/* -------------------------------------------------------------
+ * Native Overlays & Dialogs (CSS Modals)
+ * ------------------------------------------------------------- */
+dialog {
+  margin: auto;
+  border: 1px solid var(--border-glass);
+  border-radius: 24px;
+  background: #0a0a0c;
+  color: var(--text-primary);
+  padding: 22px;
+  max-width: 330px;
+  width: 90%;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75);
+  outline: none;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dialog-header {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.dialog-body {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.dialog-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* Style for reading history modal log view */
+.history-detail-modal {
+  max-width: 350px;
+  width: 95%;
+}
+
+.history-exercise-log {
+  border-bottom: 1px solid var(--border-glass);
+  padding: 10px 0;
+}
+
+.history-exercise-log:last-child {
+  border-bottom: none;
+}
+
+.history-exercise-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.history-sets-summary {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* -------------------------------------------------------------
+ * Dynamic Transition Keyframes (View Transitions)
+ * ------------------------------------------------------------- */
+::view-transition-group(root) {
+  animation: 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+html:active-view-transition-type(forward)::view-transition-old(root) {
+  animation-name: slide-to-left;
+}
+html:active-view-transition-type(forward)::view-transition-new(root) {
+  animation-name: slide-from-right;
+}
+
+html:active-view-transition-type(backward)::view-transition-old(root) {
+  animation-name: slide-to-right;
+}
+html:active-view-transition-type(backward)::view-transition-new(root) {
+  animation-name: slide-from-left;
+}
+
+/* Accessibility reduced motion fallback */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(root) {
+    animation: none !important;
+  }
+}

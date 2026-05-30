@@ -1,0 +1,16 @@
+{
+  "name": "aplift",
+  "version": "1.0.0",
+  "description": "Professional Workout Tracking PWA",
+  "scripts": {
+    "dev": "npx -y serve@latest .",
+    "start": "npx -y serve@latest ."
+  },
+  "keywords": [
+    "workout",
+    "tracker",
+    "pwa"
+  ],
+  "author": "Anmol Prabhakar",
+  "license": "MIT"
+}

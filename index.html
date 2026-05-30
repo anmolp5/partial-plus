@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>partial+ - Professional Workout Tracker</title>
+  
+  <!-- PWA Theme and Apple Support -->
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="partial+">
+  
+  <!-- Links to Icons and Manifest -->
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Responsive iPhone Emulator Shell -->
+  <div class="iphone-frame">
+    <div class="app-container">
+
+      <!-- ========================================================= -->
+      <!-- 1. LOGIN VIEW -->
+      <!-- ========================================================= -->
+      <section id="login-view" class="view-panel active">
+        <div class="logo-container">
+          <div class="logo-icon">⚡</div>
+          <h1>partial+</h1>
+          <p>Professional Workout Tracker</p>
+        </div>
+        
+        <div class="login-choices">
+          <button id="btn-user-login-prompt" class="btn">User Log In</button>
+          <button id="btn-guest-login" class="btn btn-secondary">Guest Sandbox</button>
+        </div>
+        
+        <div id="auth-form" class="auth-form-card glass-card">
+          <h2>Authentication Required</h2>
+          <p style="margin-bottom: 16px;">Enter password to unlock logging and Google Sheet webhook sync.</p>
+          <form id="login-form" onsubmit="return false;">
+            <div class="passcode-wrapper">
+              <label for="password-input" style="font-size: 12px; font-weight:600; color:var(--text-muted);">PASSWORD</label>
+              <input type="password" id="password-input" class="form-input" placeholder="••••••••" autocomplete="current-password">
+            </div>
+            <div style="display:flex; gap:10px;">
+              <button type="button" id="btn-login-back" class="btn btn-secondary" style="flex:1;">Back</button>
+              <button type="submit" id="btn-user-login" class="btn" style="flex:1;">Login</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- 2. DASHBOARD VIEW -->
+      <!-- ========================================================= -->
+      <section id="dashboard-view" class="view-panel">
+        <div class="dashboard-header">
+          <div class="today-summary">
+            <span class="date-indicator" id="dashboard-date">Sat, May 30</span>
+            <h2 id="dashboard-day-name" style="margin-bottom:0;">Saturday</h2>
+          </div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <a href="https://github.com/anmolprabhakar/PartialPlus" target="_blank" rel="noopener noreferrer" class="github-link" title="View Project on GitHub">
+              <svg class="github-icon" viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.11.82-.26.82-.577v-2.234c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.43.372.82 1.102.82 2.222v3.293c0 .319.22.694.825.576C20.565 21.795 24 17.3 24 12c0-6.63-5.37-12-12-12z"/>
+              </svg>
+            </a>
+            <span class="profile-tag" id="profile-tag">User Mode</span>
+          </div>
+        </div>
+        
+        <!-- Guest Mode Warning Banner -->
+        <div id="guest-banner" class="demo-banner" style="display:none;">
+          ⚠️ Guest Sandbox: Volatile data will be cleared on refresh.
+        </div>
+        
+        <!-- Active Workout Card -->
+        <div class="glass-card" id="today-routine-card">
+          <h2 id="today-routine-label" style="margin-bottom:4px;">Day 5 - Lower</h2>
+          <p id="today-routine-exercises" style="margin-bottom:14px; font-size:13px; color:var(--text-muted);">
+            Leg Extensions, Seated Curls, Calf Raises
+          </p>
+          
+          <!-- Dropdown selector for swaps -->
+          <div class="swap-dropdown-container" id="swap-container">
+            <label for="swap-select">Template Assigned Today:</label>
+            <select id="swap-select" class="dropdown-select">
+              <option value="Monday">Monday (Day 1 - Push)</option>
+              <option value="Tuesday">Tuesday (Day 3 - Legs)</option>
+              <option value="Wednesday">Wednesday (Day 2 - Pull)</option>
+              <option value="Thursday">Thursday (Rest Day)</option>
+              <option value="Friday">Friday (Day 4 - Upper)</option>
+              <option value="Saturday" selected>Saturday (Day 5 - Lower)</option>
+              <option value="Sunday">Sunday (Rest Day)</option>
+            </select>
+          </div>
+          
+          <button id="btn-start-workout" class="btn btn-start" style="margin-top:16px;">
+            Start Workout
+          </button>
+        </div>
+        
+        <!-- Calendar Widget -->
+        <div class="glass-card calendar-section">
+          <div class="calendar-header">
+            <button id="btn-prev-month" class="calendar-nav-btn">◀</button>
+            <span class="calendar-title" id="calendar-month-title">May 2026</span>
+            <button id="btn-next-month" class="calendar-nav-btn">▶</button>
+          </div>
+          <div class="calendar-grid" id="calendar-grid">
+            <!-- Labels generated in JS -->
+            <span class="calendar-day-label">M</span>
+            <span class="calendar-day-label">T</span>
+            <span class="calendar-day-label">W</span>
+            <span class="calendar-day-label">T</span>
+            <span class="calendar-day-label">F</span>
+            <span class="calendar-day-label">S</span>
+            <span class="calendar-day-label">S</span>
+            <!-- Days filled in JS -->
+          </div>
+        </div>
+        
+        <!-- Dashboard Navigation Utilities -->
+        <div class="dashboard-utilities">
+          <button id="btn-open-config" class="btn btn-secondary">Settings</button>
+          <button id="btn-download-csv" class="btn btn-secondary">Get CSV</button>
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- 3. WORKOUT TRACKING ENGINE (CARD VIEW) -->
+      <!-- ========================================================= -->
+      <section id="workout-view" class="view-panel">
+        <div class="workout-header">
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <h3 id="workout-view-day-label">Day 1 - Push</h3>
+            <span id="workout-view-date" style="font-size:11px; color:var(--text-muted); font-weight:600;">Sat, May 30</span>
+          </div>
+          <div class="workout-progress-bar">
+            <div id="workout-progress-fill" class="workout-progress-fill"></div>
+          </div>
+        </div>
+        
+        <!-- Exercise Card Contents -->
+        <div class="glass-card" style="flex:1; display:flex; flex-direction:column; margin-bottom:0;" id="exercise-card">
+          <div class="exercise-meta">
+            <h2 id="exercise-name" class="exercise-name">Incline Dumbbell Press</h2>
+            <div class="exercise-badges">
+              <span id="exercise-tag" class="tag-badge hc">HC</span>
+              <span id="exercise-target" class="muscle-badge">Chest/Shoulders</span>
+            </div>
+          </div>
+          
+          <!-- Data Input Table -->
+          <div class="data-matrix" id="data-matrix">
+            <div class="matrix-header">
+              <span>Set</span>
+              <span>Weight (kg)</span>
+              <span>Reps</span>
+              <span>RIR</span>
+            </div>
+            
+            <div id="set-rows-container" style="display:flex; flex-direction:column; gap:8px;">
+              <!-- Dynamically populated rows in JS -->
+            </div>
+          </div>
+          
+          <!-- Card Navigation Actions -->
+          <div class="card-navigation">
+            <button id="btn-prev-exercise" class="nav-arrow-btn" disabled>◀ Prev</button>
+            <button id="btn-next-exercise" class="nav-arrow-btn">Next ▶</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- 4. CONFIGURATION VIEW -->
+      <!-- ========================================================= -->
+      <section id="config-view" class="view-panel">
+        <div class="config-header">
+          <button id="btn-close-config" class="back-btn">◀</button>
+          <h1 style="margin-bottom:0;">Settings</h1>
+        </div>
+        
+        <!-- Routine Config JSON Editor -->
+        <div class="glass-card">
+          <div class="config-section">
+            <label for="routine-config-json">Routine Template (JSON String):</label>
+            <div id="validation-indicator" class="validation-indicator">Valid JSON Template</div>
+            <textarea id="routine-config-json" class="json-textarea" autocomplete="off" spellcheck="false"></textarea>
+            <button id="btn-save-routine" class="btn" style="margin-top:6px;">Save Routine Config</button>
+          </div>
+        </div>
+        
+        <!-- Webhook Integration -->
+        <div class="glass-card">
+          <div class="config-section">
+            <label for="webhook-url-input">Google Webhook Deployment URL:</label>
+            <input type="text" id="webhook-url-input" class="form-input" style="margin-bottom:6px;" placeholder="https://script.google.com/macros/s/...">
+            <button id="btn-save-webhook" class="btn" style="margin-top:6px;">Save Webhook URL</button>
+          </div>
+        </div>
+        
+        <!-- GitHub Integration -->
+        <div class="glass-card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:14px; font-weight:600; color:var(--text-secondary);">Project Codebase</span>
+            <a href="https://github.com/anmolprabhakar/PartialPlus" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="width:auto; padding:10px 16px; display:inline-flex; gap:8px; margin:0;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.11.82-.26.82-.577v-2.234c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.43.372.82 1.102.82 2.222v3.293c0 .319.22.694.825.576C20.565 21.795 24 17.3 24 12c0-6.63-5.37-12-12-12z"/>
+              </svg>
+              GitHub Repo
+            </a>
+          </div>
+        </div>
+
+        <!-- Hard Reset and Sign Out -->
+        <div class="glass-card" style="margin-bottom:30px;">
+          <div style="display:flex; flex-direction:column; gap:12px;">
+            <button id="btn-logout" class="btn btn-secondary">Logout</button>
+            <button id="btn-reset-data" class="btn btn-danger">Hard Reset (Clear All)</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================================= -->
+      <!-- NATIVE OVERLAYS (DIALOG MODALS) -->
+      <!-- ========================================================= -->
+      
+      <!-- End Workout Confirmation Modal -->
+      <dialog id="confirm-end-modal">
+        <form method="dialog" class="dialog-content">
+          <div class="dialog-header">End Workout Session?</div>
+          <div class="dialog-body" id="end-workout-message">
+            Are you sure you want to finish and log today's session? All recorded sets will be saved and synced.
+          </div>
+          <div class="dialog-buttons">
+            <button type="submit" value="cancel" class="btn btn-secondary" style="flex:1; padding:10px;">Cancel</button>
+            <button type="submit" value="confirm" class="btn" style="flex:1; padding:10px;">End Session</button>
+          </div>
+        </form>
+      </dialog>
+      
+      <!-- History Date Log Viewer Modal -->
+      <dialog id="history-log-modal" class="history-detail-modal">
+        <form method="dialog" class="dialog-content">
+          <div class="dialog-header" id="history-log-title">Saturday, May 30</div>
+          <div class="dialog-body" style="max-height:300px; overflow-y:auto; padding-right:4px;">
+            <h4 id="history-log-routine-label" style="font-weight:600; color:var(--accent-mint); margin-bottom:10px;">Day 5 - Lower</h4>
+            <div id="history-log-details-container">
+              <!-- Dynamically populated list of completed exercises -->
+            </div>
+          </div>
+          <div class="dialog-buttons">
+            <button type="button" id="btn-edit-historical-workout" class="btn" style="flex:1.2; padding:10px;">Edit Workout</button>
+            <button type="submit" value="close" class="btn btn-secondary" style="flex:1; padding:10px;">Close</button>
+          </div>
+        </form>
+      </dialog>
+
+      <!-- Smart Input Navigation Accessory Bar -->
+      <div id="keyboard-accessory" class="input-accessory-bar">
+        <div class="accessory-nav">
+          <button type="button" id="btn-accessory-prev" class="accessory-btn">▲ Up</button>
+          <button type="button" id="btn-accessory-next" class="accessory-btn">▼ Down</button>
+        </div>
+        <button type="button" id="btn-accessory-done" class="accessory-btn accessory-btn-done">Done</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Config & App Script Modules -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
