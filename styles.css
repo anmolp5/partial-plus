@@ -150,7 +150,7 @@ body {
   position: relative;
 }
 
-.iphone-frame, .app-container, .view-panel, .glass-card, .data-matrix {
+.iphone-frame, .app-container, .view-panel, .data-matrix {
   overflow-x: hidden !important;
   max-width: 100% !important;
 }
@@ -200,6 +200,9 @@ body {
   margin-bottom: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s;
+  flex-shrink: 0;
+  overflow: hidden !important;
+  max-width: 100% !important;
 }
 
 .glass-card:active {

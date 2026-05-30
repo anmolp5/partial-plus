@@ -923,21 +923,18 @@ async function testWebhookSync() {
   statusDiv.style.color = 'var(--accent-lavender)';
   statusDiv.textContent = '⏳ Sending connection test payload...';
 
-  const testPayload = {
-    action: 'log_workout',
-    payload: [
-      {
-        date: new Date().toISOString().split('T')[0],
-        dayLabel: 'Test Connection',
-        exercise: 'Webhook Verification Set',
-        setNumber: 1,
-        tag: 'Base',
-        weight: '999',
-        reps: '999',
-        rir: '999'
-      }
-    ]
-  };
+  const testPayload = [
+    {
+      date: new Date().toISOString().split('T')[0],
+      dayLabel: 'Test Connection',
+      exerciseName: 'Webhook Verification Set',
+      setNumber: 1,
+      tag: 'Base',
+      weight: '999',
+      reps: '999',
+      rir: '999'
+    }
+  ];
 
   try {
     const response = await fetch(url, {
@@ -1035,7 +1032,7 @@ async function transmitWebhookLog(record) {
       rows.push({
         date: record.date,
         dayLabel: record.dayLabel,
-        exercise: ex.name,
+        exerciseName: ex.name,
         setNumber: i + 1,
         tag: ex.tag,
         weight: set.weight,
@@ -1052,10 +1049,7 @@ async function transmitWebhookLog(record) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        action: 'log_workout',
-        payload: rows
-      })
+      body: JSON.stringify(rows)
     });
     console.log("Webhook payload dispatched successfully.");
   } catch (err) {
