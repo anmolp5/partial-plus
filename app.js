@@ -1790,7 +1790,11 @@ async function restoreHistoryFromSheets() {
       }
       
       let date = row.date.trim();
-      if (!date) return;
+      if (!date || date === 'undefined') return;
+      
+      // Extract only the YYYY-MM-DD portion if a timestamp or time offset is appended
+      if (date.includes('T')) date = date.split('T')[0];
+      if (date.includes(' ')) date = date.split(' ')[0];
       
       // Normalize slashes to dashes and convert MM/DD/YYYY to YYYY-MM-DD
       const parts = date.split(/[-/]/);
