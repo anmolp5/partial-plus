@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aplift-v9';
+const CACHE_NAME = 'aplift-v10';
 const ASSETS = [
   './',
   './index.html',
@@ -40,8 +40,10 @@ self.addEventListener('activate', (e) => {
 
 // Fetch event - serving cached assets
 self.addEventListener('fetch', (e) => {
-  // Check if target is webhook URL, bypass caching for webhook URLs
-  if (e.request.url.includes('script.google.com') || e.request.method === 'POST') {
+  // Check if target is webhook URL or Google redirect URL, bypass caching
+  if (e.request.url.includes('script.google.com') || 
+      e.request.url.includes('googleusercontent.com') || 
+      e.request.method === 'POST') {
     return; // let it hit the network
   }
 
