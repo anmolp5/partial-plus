@@ -1291,8 +1291,8 @@ async function concludeWorkoutSession() {
     state.history[wk.date] = workoutRecord;
     localStorage.setItem(KEYS.HISTORY, JSON.stringify(state.history));
 
-    // 2. Transmit to Google Sheet Webhook Async
-    await transmitWebhookLog(workoutRecord);
+    // 2. Transmit to Google Sheet Webhook Async (non-blocking)
+    transmitWebhookLog(workoutRecord).catch(err => console.error("Sheets sync error", err));
     
     // Clear recovery memory
     localStorage.removeItem(KEYS.ACTIVE_WORKOUT);
