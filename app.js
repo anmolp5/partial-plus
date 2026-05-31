@@ -45,16 +45,6 @@ let lapStartTime = null;         // Date.now() when current lap started
 // Initialization & Routing Engine
 // -------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-  // TEMP: Clear today's workout for testing
-  const tmpH = JSON.parse(localStorage.getItem('partial_plus_history') || '{}');
-  const tmpToday = new Date();
-  const tmpOffset = tmpToday.getTimezoneOffset();
-  const tmpLocal = new Date(tmpToday.getTime() - (tmpOffset*60*1000));
-  const tmpDateStr = tmpLocal.toISOString().split('T')[0];
-  delete tmpH[tmpDateStr];
-  localStorage.setItem('partial_plus_history', JSON.stringify(tmpH));
-  // END TEMP
-
   initPWA();
   loadStateFromStorage();
   setupEventListeners();
