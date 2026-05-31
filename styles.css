@@ -692,6 +692,7 @@ p {
 }
 
 .workout-progress-bar {
+  display: block !important;
   height: 4px;
   width: 90px;
   background: rgba(255, 255, 255, 0.1);
