@@ -389,11 +389,22 @@ function getLocalDateString(date) {
 }
 
 function getWeekMonday(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) {
+    throw new Error(`Invalid date format for Monday adjustment: "${dateStr}"`);
+  }
+  const d = new Date(parts[0], parts[1] - 1, parts[2]); // timezone-safe local date
+  if (isNaN(d.getTime())) {
+    throw new Error(`Invalid date for Monday adjustment: "${dateStr}"`);
+  }
   const day = d.getDay(); // 0 (Sun) - 6 (Sat)
   const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust to Monday
   const monday = new Date(d.setDate(diff));
-  return monday.toISOString().split('T')[0];
+  
+  const year = monday.getFullYear();
+  const month = String(monday.getMonth() + 1).padStart(2, '0');
+  const dayNum = String(monday.getDate()).padStart(2, '0');
+  return `${year}-${month}-${dayNum}`;
 }
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -1806,6 +1817,10 @@ async function restoreHistoryFromSheets() {
           // YYYY-MM-DD normalized
           date = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
         }
+      } else {
+        // Skip malformed date strings
+        console.warn(`Skipping malformed row date: "${row.date}"`);
+        return;
       }
       
       if (!reconstructed[date]) {
@@ -1844,27 +1859,39 @@ async function restoreHistoryFromSheets() {
     });
     
     // Filter undefined sets and resolve templateDay if blank
+    const finalHistory = {};
     for (const date in reconstructed) {
-      reconstructed[date].exercises.forEach(ex => {
-        ex.setData = ex.setData.filter(s => s !== undefined);
-      });
-      
-      // Resilient cross-browser dayOfWeek parser (slashes are widely supported in Safari new Date)
-      let dayOfWeek = 'Monday';
-      const parsedDate = new Date(date.replace(/-/g, '/'));
-      if (!isNaN(parsedDate.getTime())) {
-        dayOfWeek = WEEKDAYS[parsedDate.getDay()];
+      try {
+        const parts = date.split('-');
+        if (parts.length !== 3) continue;
+        
+        reconstructed[date].exercises.forEach(ex => {
+          ex.setData = ex.setData.filter(s => s !== undefined);
+        });
+        
+        // Verify date validation before computing weeks
+        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+        if (isNaN(d.getTime())) {
+          console.warn(`Skipping invalid date entry during parse: "${date}"`);
+          continue;
+        }
+        
+        const dayOfWeek = WEEKDAYS[d.getDay()];
+        const weekMonday = getWeekMonday(date);
+        reconstructed[date].templateDay = getTemplateDayForWeekday(dayOfWeek, weekMonday);
+        
+        finalHistory[date] = reconstructed[date];
+      } catch (err) {
+        console.warn(`Skipping parse error for date "${date}":`, err);
       }
-      
-      reconstructed[date].templateDay = getTemplateDayForWeekday(dayOfWeek, getWeekMonday(date));
     }
     
     // Save to local storage and memory
-    state.history = reconstructed;
+    state.history = finalHistory;
     localStorage.setItem(KEYS.HISTORY, JSON.stringify(state.history));
     
     statusEl.style.color = 'var(--accent-mint)';
-    statusEl.textContent = `✅ Successfully restored ${Object.keys(reconstructed).length} workout log(s)!`;
+    statusEl.textContent = `✅ Successfully restored ${Object.keys(finalHistory).length} workout log(s)!`;
     
     // Refresh calendar
     renderCalendar();
