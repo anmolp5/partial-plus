@@ -1789,8 +1789,20 @@ async function restoreHistoryFromSheets() {
         return;
       }
       
-      const date = row.date.trim();
+      let date = row.date.trim();
       if (!date) return;
+      
+      // Normalize slashes to dashes and convert MM/DD/YYYY to YYYY-MM-DD
+      const parts = date.split(/[-/]/);
+      if (parts.length === 3) {
+        if (parts[0].length !== 4) {
+          // MM/DD/YYYY to YYYY-MM-DD
+          date = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+        } else {
+          // YYYY-MM-DD normalized
+          date = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        }
+      }
       
       if (!reconstructed[date]) {
         reconstructed[date] = {
@@ -1832,7 +1844,14 @@ async function restoreHistoryFromSheets() {
       reconstructed[date].exercises.forEach(ex => {
         ex.setData = ex.setData.filter(s => s !== undefined);
       });
-      const dayOfWeek = WEEKDAYS[new Date(date + 'T00:00:00').getDay()];
+      
+      // Resilient cross-browser dayOfWeek parser (slashes are widely supported in Safari new Date)
+      let dayOfWeek = 'Monday';
+      const parsedDate = new Date(date.replace(/-/g, '/'));
+      if (!isNaN(parsedDate.getTime())) {
+        dayOfWeek = WEEKDAYS[parsedDate.getDay()];
+      }
+      
       reconstructed[date].templateDay = getTemplateDayForWeekday(dayOfWeek, getWeekMonday(date));
     }
     
