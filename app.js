@@ -1214,6 +1214,7 @@ async function testWebhookSync() {
     {
       date: new Date().toISOString().split('T')[0],
       dayLabel: 'Test Connection',
+      workoutTime: '00:01',
       exerciseName: 'Webhook Verification Set',
       setNumber: 1,
       tag: 'Base',
@@ -1262,16 +1263,27 @@ async function testWebhookSync() {
 // 5. Conclude Workout Session & Webhook Pipeline
 // -------------------------------------------------------------
 async function concludeWorkoutSession() {
+  const wk = state.activeWorkout;
+  
+  // Calculate elapsed time before stopping
+  let elapsedStr = '00:00';
+  if (wk.isEditingHistorical) {
+    const existing = state.history[wk.date];
+    elapsedStr = existing ? (existing.elapsedTime || '00:00') : '00:00';
+  } else if (stopwatchStartTime) {
+    const elapsedMs = Date.now() - stopwatchStartTime;
+    elapsedStr = formatElapsed(elapsedMs);
+  }
+
   // Stop stopwatch
   stopStopwatch();
-
-  const wk = state.activeWorkout;
 
   // Structure complete log entry
   const workoutRecord = {
     date: wk.date,
     dayLabel: wk.dayLabel,
     templateDay: wk.templateDay,
+    elapsedTime: elapsedStr,
     exercises: wk.exercises.map(ex => ({
       name: ex.name,
       tag: ex.tag,
@@ -1324,6 +1336,7 @@ async function transmitWebhookLog(record) {
       rows.push({
         date: record.date,
         dayLabel: record.dayLabel,
+        workoutTime: record.elapsedTime || '00:00',
         exerciseName: ex.name,
         setNumber: i + 1,
         tag: ex.tag,

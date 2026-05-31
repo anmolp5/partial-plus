@@ -604,10 +604,17 @@ p {
 }
 
 .calendar-day.completed {
-  background: var(--accent-gradient);
-  color: #000000;
+  background: #5c2ba5; /* Deeper purple fill */
+  color: #ffffff;
   font-weight: 700;
-  box-shadow: 0 2px 8px rgba(191, 155, 254, 0.3);
+  box-shadow: 0 2px 8px rgba(92, 43, 165, 0.4);
+}
+
+.calendar-day.completed-rest {
+  color: var(--accent-lavender);
+  font-weight: 700;
+  background: transparent;
+  border: 1px solid rgba(191, 155, 254, 0.45);
 }
 
 .calendar-day.other-month {
