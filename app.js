@@ -1800,28 +1800,16 @@ async function restoreHistoryFromSheets() {
         return;
       }
       
-      let date = row.date.trim();
-      if (!date || date === 'undefined') return;
-      
-      // Extract only the YYYY-MM-DD portion if a timestamp or time offset is appended
-      if (date.includes('T')) date = date.split('T')[0];
-      if (date.includes(' ')) date = date.split(' ')[0];
-      
-      // Normalize slashes to dashes and convert MM/DD/YYYY to YYYY-MM-DD
-      const parts = date.split(/[-/]/);
-      if (parts.length === 3) {
-        if (parts[0].length !== 4) {
-          // MM/DD/YYYY to YYYY-MM-DD
-          date = `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
-        } else {
-          // YYYY-MM-DD normalized
-          date = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-        }
-      } else {
-        // Skip malformed date strings
-        console.warn(`Skipping malformed row date: "${row.date}"`);
+      const d = new Date(row.date);
+      if (isNaN(d.getTime())) {
+        console.warn(`Skipping invalid date: "${row.date}"`);
         return;
       }
+      
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const date = `${year}-${month}-${day}`;
       
       if (!reconstructed[date]) {
         reconstructed[date] = {
