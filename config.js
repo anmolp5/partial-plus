@@ -138,7 +138,7 @@ export function saveRoutineConfig(config) {
  * @returns {string} Webhook URL or placeholder.
  */
 export function getWebhookUrl() {
-  return localStorage.getItem(STORAGE_KEYS.WEBHOOK) || 'https://script.google.com/macros/s/YOUR_APPS_SCRIPT_ID/exec';
+  return localStorage.getItem(STORAGE_KEYS.WEBHOOK) || 'https://script.google.com/macros/s/AKfycbw0kJpBdIZ8c0UekZNEaKZf39SNvMQcKq-8z0Y-GjURsUWMOq8Lna6k2H6yps7R4R-dNQ/exec';
 }
 
 /**
