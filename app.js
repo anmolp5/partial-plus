@@ -369,6 +369,11 @@ function setupEventListeners() {
   document.getElementById('btn-test-webhook').addEventListener('click', () => {
     testWebhookSync();
   });
+
+  // Restore History click handler
+  document.getElementById('btn-restore-history').addEventListener('click', () => {
+    restoreHistoryFromSheets();
+  });
 }
 
 // -------------------------------------------------------------
@@ -1743,4 +1748,105 @@ function initPatternLock() {
   };
   
   draw();
+}
+
+async function restoreHistoryFromSheets() {
+  const statusEl = document.getElementById('webhook-restore-status');
+  if (!statusEl) return;
+  
+  const webhookUrl = getWebhookUrl();
+  if (!webhookUrl || webhookUrl.includes('YOUR_APPS_SCRIPT_ID')) {
+    statusEl.style.display = 'block';
+    statusEl.style.color = 'var(--accent-red)';
+    statusEl.textContent = '❌ Invalid Google Webhook Deployment URL.';
+    return;
+  }
+  
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--accent-lavender)';
+  statusEl.textContent = '⏳ Fetching data from Google Sheet...';
+  
+  try {
+    const response = await fetch(webhookUrl);
+    if (!response.ok) {
+      throw new Error(`HTTP Error: ${response.status}`);
+    }
+    const rows = await response.json();
+    
+    if (rows.status === "error") {
+      throw new Error(rows.message);
+    }
+    
+    if (!Array.isArray(rows)) {
+      throw new Error("Invalid response format received from Google Sheet.");
+    }
+    
+    // Reconstruct history object
+    const reconstructed = {};
+    rows.forEach(row => {
+      // Skip connection verification test logs
+      if (row.dayLabel === 'Test Connection' || !row.date || row.date === 'undefined') {
+        return;
+      }
+      
+      const date = row.date.trim();
+      if (!date) return;
+      
+      if (!reconstructed[date]) {
+        reconstructed[date] = {
+          date: date,
+          dayLabel: row.dayLabel,
+          templateDay: '',
+          elapsedTime: row.workoutTime || '00:00',
+          exercises: []
+        };
+      }
+      
+      if (row.exerciseName === 'Rest Day' && !row.setNumber) {
+        return;
+      }
+      
+      let ex = reconstructed[date].exercises.find(e => e.name === row.exerciseName);
+      if (!ex) {
+        ex = {
+          name: row.exerciseName,
+          tag: row.tag || '',
+          target: '',
+          setData: []
+        };
+        reconstructed[date].exercises.push(ex);
+      }
+      
+      const setIndex = parseInt(row.setNumber) - 1;
+      if (!isNaN(setIndex) && setIndex >= 0) {
+        ex.setData[setIndex] = {
+          weight: row.weight || '0',
+          reps: row.reps || '0',
+          rir: row.rir || '0'
+        };
+      }
+    });
+    
+    // Filter undefined sets and resolve templateDay if blank
+    for (const date in reconstructed) {
+      reconstructed[date].exercises.forEach(ex => {
+        ex.setData = ex.setData.filter(s => s !== undefined);
+      });
+      const dayOfWeek = WEEKDAYS[new Date(date + 'T00:00:00').getDay()];
+      reconstructed[date].templateDay = getTemplateDayForWeekday(dayOfWeek, getWeekMonday(date));
+    }
+    
+    // Save to local storage and memory
+    state.history = reconstructed;
+    localStorage.setItem(KEYS.HISTORY, JSON.stringify(state.history));
+    
+    statusEl.style.color = 'var(--accent-mint)';
+    statusEl.textContent = `✅ Successfully restored ${Object.keys(reconstructed).length} workout log(s)!`;
+    
+    // Refresh calendar
+    renderCalendar();
+  } catch (err) {
+    statusEl.style.color = 'var(--accent-red)';
+    statusEl.textContent = `❌ Restore Failed: ${err.message}`;
+  }
 }
