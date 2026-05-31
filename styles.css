@@ -348,6 +348,10 @@ p {
   animation: float 4s ease-in-out infinite;
 }
 
+.logo-icon-svg {
+  filter: drop-shadow(0 0 12px rgba(191, 155, 254, 0.6));
+}
+
 @keyframes float {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
@@ -383,6 +387,24 @@ p {
 
 .shake {
   animation: shake-anim 0.4s ease-in-out;
+}
+
+.pattern-lock-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 15px auto;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 24px;
+  border: 1px solid var(--border-glass);
+  width: fit-content;
+}
+
+#pattern-canvas {
+  display: block;
+  touch-action: none; /* Crucial: prevent scrolling when dragging patterns on iOS/Android */
+  border-radius: 16px;
 }
 
 @keyframes shake-anim {

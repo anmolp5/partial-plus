@@ -29,7 +29,12 @@
       <!-- ========================================================= -->
       <section id="login-view" class="view-panel active">
         <div class="logo-container">
-          <div class="logo-icon">⚡</div>
+          <div class="logo-icon" style="background: none; -webkit-text-fill-color: initial;">
+            <svg class="logo-icon-svg" viewBox="0 0 100 100" width="70" height="70">
+              <path d="M 27,57 L 50,57 M 50,18 L 50,76 M 50,18 C 70,18 81.5,26 81.5,37.5 C 81.5,49 70,57 50,57" 
+                    stroke="var(--accent-lavender)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+            </svg>
+          </div>
           <h1>partial+</h1>
           <p>Professional Workout Tracker</p>
         </div>
@@ -39,19 +44,15 @@
           <button id="btn-guest-login" class="btn btn-secondary">Guest Mode</button>
         </div>
         
-        <div id="auth-form" class="auth-form-card glass-card">
+        <div id="auth-form" class="auth-form-card glass-card" style="text-align: center;">
           <h2>Authentication Required</h2>
-          <p style="margin-bottom: 16px;">Enter password to unlock logging and Google Sheet webhook sync.</p>
-          <form id="login-form" onsubmit="return false;">
-            <div class="passcode-wrapper">
-              <label for="password-input" style="font-size: 12px; font-weight:600; color:var(--text-muted);">PASSWORD</label>
-              <input type="password" id="password-input" class="form-input" placeholder="••••••••" autocomplete="current-password">
-            </div>
-            <div style="display:flex; gap:10px;">
-              <button type="button" id="btn-login-back" class="btn btn-secondary" style="flex:1;">Back</button>
-              <button type="submit" id="btn-user-login" class="btn" style="flex:1;">Login</button>
-            </div>
-          </form>
+          <p style="margin-bottom: 16px;">Draw pattern to unlock logging and Google Sheet webhook sync.</p>
+          <div class="pattern-lock-container">
+            <canvas id="pattern-canvas" width="280" height="280"></canvas>
+          </div>
+          <div style="display:flex; gap:10px; margin-top: 15px;">
+            <button type="button" id="btn-login-back" class="btn btn-secondary" style="flex:1;">Back</button>
+          </div>
         </div>
       </section>
 

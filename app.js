@@ -58,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initPWA();
   loadStateFromStorage();
   setupEventListeners();
+  initPatternLock();
   routeToInitialView();
 });
 
@@ -195,37 +196,12 @@ function setupEventListeners() {
   document.getElementById('btn-user-login-prompt').addEventListener('click', () => {
     document.querySelector('.login-choices').style.display = 'none';
     document.getElementById('auth-form').classList.add('active');
-    document.getElementById('password-input').focus();
+    resetPatternLock();
   });
   
   document.getElementById('btn-login-back').addEventListener('click', () => {
     document.getElementById('auth-form').classList.remove('active');
     document.querySelector('.login-choices').style.display = 'flex';
-  });
-
-  document.getElementById('login-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const pw = document.getElementById('password-input').value;
-    const authCard = document.getElementById('auth-form');
-    
-    if (pw === 'aplift') {
-      state.auth = { loggedIn: true, mode: 'user' };
-      localStorage.setItem(KEYS.SESSION, JSON.stringify(state.auth));
-      
-      // Load user data now that authenticated
-      loadStateFromStorage();
-      
-      showView('dashboard-view');
-      initDashboard();
-    } else {
-      // Trigger CSS shake animation on validation fail
-      authCard.classList.remove('shake');
-      void authCard.offsetWidth; // Trigger reflow
-      authCard.classList.add('shake');
-      
-      // Reset input field
-      document.getElementById('password-input').value = '';
-    }
   });
 
   document.getElementById('btn-guest-login').addEventListener('click', () => {
@@ -269,7 +245,6 @@ function setupEventListeners() {
     localStorage.removeItem(KEYS.SESSION);
     localStorage.removeItem(KEYS.ACTIVE_WORKOUT);
     showView('login-view', 'backward');
-    document.getElementById('password-input').value = '';
     document.getElementById('auth-form').classList.remove('active');
     document.querySelector('.login-choices').style.display = 'flex';
   });
@@ -295,8 +270,6 @@ function setupEventListeners() {
     localStorage.removeItem(KEYS.ACTIVE_WORKOUT);
     showView('login-view', 'backward');
     
-    // Reset inputs
-    document.getElementById('password-input').value = '';
     document.getElementById('auth-form').classList.remove('active');
     document.querySelector('.login-choices').style.display = 'flex';
   });
@@ -309,7 +282,6 @@ function setupEventListeners() {
       state.auth = { loggedIn: false, mode: 'user' };
       showView('login-view', 'backward');
       
-      document.getElementById('password-input').value = '';
       document.getElementById('auth-form').classList.remove('active');
       document.querySelector('.login-choices').style.display = 'flex';
     }
@@ -894,7 +866,7 @@ function startStopwatch(savedStartTime, savedLapStartTime) {
   stopwatchInterval = setInterval(() => {
     updateStopwatchDisplay();
     updateLapDisplay();
-  }, 100);
+  }, 10);
 }
 
 function stopStopwatch() {
@@ -942,7 +914,7 @@ function updateLapDisplay() {
 
 function formatElapsedWithTenths(ms) {
   const totalSeconds = Math.floor(ms / 1000);
-  const tenths = Math.floor((ms % 1000) / 100);
+  const hundredths = Math.floor((ms % 1000) / 10);
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
@@ -950,9 +922,9 @@ function formatElapsedWithTenths(ms) {
   const pad = (n) => String(n).padStart(2, '0');
   
   if (hours > 0) {
-    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${tenths}`;
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${pad(hundredths)}`;
   }
-  return `${pad(minutes)}:${pad(seconds)}.${tenths}`;
+  return `${pad(minutes)}:${pad(seconds)}.${pad(hundredths)}`;
 }
 
 function handleLapButton() {
@@ -1597,4 +1569,175 @@ function saveRoutineFromEditor() {
   } catch (e) {
     alert("Failed to save. Review validation errors.");
   }
+}
+
+// -------------------------------------------------------------
+// Pattern Lock Module
+// -------------------------------------------------------------
+let patternDots = [
+  { id: 1, x: 50, y: 50 },
+  { id: 2, x: 140, y: 50 },
+  { id: 3, x: 230, y: 50 },
+  { id: 4, x: 50, y: 140 },
+  { id: 5, x: 140, y: 140 },
+  { id: 6, x: 230, y: 140 },
+  { id: 7, x: 50, y: 230 },
+  { id: 8, x: 140, y: 230 },
+  { id: 9, x: 230, y: 230 }
+];
+let selectedPattern = [];
+let currentTouchPos = null;
+let isDrawingPattern = false;
+
+function initPatternLock() {
+  const canvas = document.getElementById('pattern-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw connecting lines
+    if (selectedPattern.length > 0) {
+      ctx.beginPath();
+      const firstDot = patternDots.find(d => d.id === selectedPattern[0]);
+      ctx.moveTo(firstDot.x, firstDot.y);
+      for (let i = 1; i < selectedPattern.length; i++) {
+        const dot = patternDots.find(d => d.id === selectedPattern[i]);
+        ctx.lineTo(dot.x, dot.y);
+      }
+      if (isDrawingPattern && currentTouchPos) {
+        ctx.lineTo(currentTouchPos.x, currentTouchPos.y);
+      }
+      ctx.strokeStyle = 'rgba(191, 155, 254, 0.85)';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = 'rgba(191, 155, 254, 0.5)';
+      ctx.stroke();
+      ctx.shadowBlur = 0; // reset
+    }
+    
+    // Draw dots
+    patternDots.forEach(dot => {
+      const isSelected = selectedPattern.includes(dot.id);
+      
+      // Outer ring
+      ctx.beginPath();
+      ctx.arc(dot.x, dot.y, 24, 0, Math.PI * 2);
+      ctx.fillStyle = isSelected ? 'rgba(191, 155, 254, 0.15)' : 'rgba(255, 255, 255, 0.03)';
+      ctx.strokeStyle = isSelected ? 'rgba(191, 155, 254, 0.6)' : 'rgba(255, 255, 255, 0.1)';
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+      
+      // Inner dot
+      ctx.beginPath();
+      ctx.arc(dot.x, dot.y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = isSelected ? 'hsl(260, 95%, 78%)' : 'rgba(255, 255, 255, 0.3)';
+      ctx.fill();
+    });
+  }
+  
+  function getPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
+  
+  function handleStart(e) {
+    e.preventDefault();
+    isDrawingPattern = true;
+    selectedPattern = [];
+    const pos = getPos(e);
+    currentTouchPos = pos;
+    checkCollision(pos);
+    draw();
+  }
+  
+  function handleMove(e) {
+    if (!isDrawingPattern) return;
+    e.preventDefault();
+    const pos = getPos(e);
+    currentTouchPos = pos;
+    checkCollision(pos);
+    draw();
+  }
+  
+  function handleEnd(e) {
+    if (!isDrawingPattern) return;
+    isDrawingPattern = false;
+    currentTouchPos = null;
+    
+    // Validate pattern: 7 -> 4 -> 2 -> 3 -> 6 -> 8 -> 5
+    const correctPattern = [7, 4, 2, 3, 6, 8, 5];
+    const isCorrect = selectedPattern.length === correctPattern.length &&
+                      selectedPattern.every((val, index) => val === correctPattern[index]);
+                      
+    const authCard = document.getElementById('auth-form');
+    if (isCorrect) {
+      state.auth = { loggedIn: true, mode: 'user' };
+      localStorage.setItem(KEYS.SESSION, JSON.stringify(state.auth));
+      loadStateFromStorage();
+      showView('dashboard-view');
+      initDashboard();
+    } else {
+      // Trigger CSS shake animation on validation fail
+      authCard.classList.remove('shake');
+      void authCard.offsetWidth; // Trigger reflow
+      authCard.classList.add('shake');
+    }
+    
+    selectedPattern = [];
+    draw();
+  }
+  
+  function checkCollision(pos) {
+    patternDots.forEach(dot => {
+      const dist = Math.hypot(pos.x - dot.x, pos.y - dot.y);
+      if (dist < 24) { // hit radius matches outer ring radius
+        if (!selectedPattern.includes(dot.id)) {
+          selectedPattern.push(dot.id);
+          if (navigator.vibrate) {
+            navigator.vibrate(20);
+          }
+        }
+      }
+    });
+  }
+  
+  // Touch events
+  canvas.addEventListener('touchstart', handleStart, { passive: false });
+  canvas.addEventListener('touchmove', handleMove, { passive: false });
+  canvas.addEventListener('touchend', handleEnd, { passive: false });
+  
+  // Mouse events
+  canvas.addEventListener('mousedown', handleStart);
+  
+  // Window listeners for dragging outside canvas bounds
+  window.addEventListener('mousemove', (e) => {
+    if (isDrawingPattern) {
+      handleMove(e);
+    }
+  });
+  window.addEventListener('mouseup', (e) => {
+    if (isDrawingPattern) {
+      handleEnd(e);
+    }
+  });
+  
+  // Bind draw method window-wide for redraw/reset utility
+  window.resetPatternLock = function() {
+    selectedPattern = [];
+    currentTouchPos = null;
+    isDrawingPattern = false;
+    draw();
+  };
+  
+  draw();
 }
