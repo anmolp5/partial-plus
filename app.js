@@ -483,8 +483,7 @@ function setupEventListeners() {
 // -------------------------------------------------------------
 function getLocalDateString(date) {
   if (!date) {
-    // Override date to June 3, 2026 for testing purposes
-    date = new Date('2026-06-03T12:00:00');
+    date = new Date();
   }
   const offset = date.getTimezoneOffset();
   const localDate = new Date(date.getTime() - (offset*60*1000));
