@@ -83,6 +83,9 @@ function loadStateFromStorage() {
     if (savedHistory) {
       try {
         state.history = JSON.parse(savedHistory);
+        migrateLocalHistoryExerciseNames();
+        runExerciseMigrationOnSheets();
+        autoLogPastRestDays();
       } catch (e) {
         console.error("Failed to parse history", e);
       }
@@ -186,9 +189,9 @@ function updateProfileTag() {
       if (configBtn) configBtn.style.display = 'none';
       if (dashboardView) dashboardView.classList.add('guest-mode');
     } else {
-      tag.textContent = 'Active Lifter';
-      tag.style.background = 'rgba(6, 214, 160, 0.1)';
-      tag.style.color = 'var(--accent-mint)';
+      tag.textContent = 'Anmol P.';
+      tag.style.background = 'rgba(191, 155, 254, 0.1)';
+      tag.style.color = 'var(--accent-lavender)';
       document.getElementById('guest-banner').style.display = 'none';
       if (configBtn) configBtn.style.display = 'flex';
       if (dashboardView) dashboardView.classList.remove('guest-mode');
@@ -477,18 +480,32 @@ function setupEventListeners() {
     }
   });
 
-  // Check In button triggers
-  const checkinBtn = document.getElementById('btn-checkin');
-  const checkinModal = document.getElementById('checkin-modal');
-  const closeCheckinBtn = document.getElementById('btn-close-checkin');
-  if (checkinBtn && checkinModal) {
-    checkinBtn.addEventListener('click', () => {
-      checkinModal.showModal();
+  // Stats modal triggers
+  const profileTag = document.getElementById('profile-tag');
+  const statsModal = document.getElementById('stats-modal');
+  const closeStatsBtn = document.getElementById('btn-close-stats');
+  if (profileTag && statsModal) {
+    profileTag.addEventListener('click', () => {
+      if (state.auth.mode === 'user') {
+        calculateConsistencyStats();
+        statsModal.showModal();
+      }
     });
   }
-  if (closeCheckinBtn && checkinModal) {
-    closeCheckinBtn.addEventListener('click', () => {
-      checkinModal.close();
+  if (closeStatsBtn && statsModal) {
+    closeStatsBtn.addEventListener('click', () => {
+      statsModal.close();
+    });
+  }
+
+  // Historical Log Rest Day listener
+  const btnLogHistRest = document.getElementById('btn-log-historical-rest');
+  if (btnLogHistRest) {
+    btnLogHistRest.addEventListener('click', () => {
+      const dateStr = btnLogHistRest.dataset.date;
+      if (dateStr) {
+        logRestDay(dateStr);
+      }
     });
   }
 }
@@ -587,13 +604,20 @@ function renderTodayRoutineDetails(dateStr) {
   if (hasCompletedToday) {
     const completedLog = state.history[dateStr];
     if (completedLog) {
-      const list = completedLog.exercises.map(ex => ex.name).join(', ');
-      exercisesEl.textContent = list;
+      if (completedLog.exercises && completedLog.exercises.length === 0) {
+        exercisesEl.textContent = 'Logged Rest Day. Recovered successfully!';
+        startBtn.style.display = 'none';
+      } else {
+        const list = completedLog.exercises.map(ex => ex.name).join(', ');
+        exercisesEl.textContent = list;
+        startBtn.textContent = 'Edit Workout';
+        startBtn.style.display = 'block';
+      }
     } else {
       exercisesEl.textContent = routine.exercises.map(ex => ex.name).join(', ');
+      startBtn.textContent = 'Edit Workout';
+      startBtn.style.display = 'block';
     }
-    startBtn.textContent = 'Edit Workout';
-    startBtn.style.display = 'block';
     swapSelect.disabled = true;
   } else {
     startBtn.textContent = 'Start Workout';
@@ -881,9 +905,13 @@ function createDayCell(dateObj, isOtherMonth) {
     cell.classList.add('today');
   }
 
-  // Highlight if workout logged in history
-  if (state.history[dateStr]) {
-    cell.classList.add('completed');
+  const log = state.history[dateStr];
+  if (log) {
+    if (log.exercises && log.exercises.length === 0) {
+      cell.classList.add('completed-rest');
+    } else {
+      cell.classList.add('completed');
+    }
   }
 
   // Handle tap log detail display and future day style
@@ -1497,23 +1525,27 @@ async function transmitWebhookLog(record) {
     return;
   }
 
+  if (!record.exercises || record.exercises.length === 0) {
+    return; // Do not log rest days to the Google Sheet
+  }
+
   // Format flattened rows for App Script consumption
   const rows = [];
-  record.exercises.forEach(ex => {
-    ex.setData.forEach((set, i) => {
-      rows.push({
-        date: record.date,
-        dayLabel: record.dayLabel,
-        workoutTime: record.elapsedTime || '00:00',
-        exerciseName: ex.name,
-        setNumber: i + 1,
-        tag: ex.tag,
-        weight: set.weight,
-        reps: set.reps,
-        rir: set.rir
+    record.exercises.forEach(ex => {
+      ex.setData.forEach((set, i) => {
+        rows.push({
+          date: record.date,
+          dayLabel: record.dayLabel,
+          workoutTime: record.elapsedTime || '00:00',
+          exerciseName: ex.name,
+          setNumber: i + 1,
+          tag: ex.tag,
+          weight: set.weight,
+          reps: set.reps,
+          rir: set.rir
+        });
       });
     });
-  });
 
   try {
     const response = await fetch(webhookUrl, {
@@ -1551,31 +1583,42 @@ function showCalendarDayDetails(dateStr) {
     label.style.display = 'block';
     
     container.innerHTML = '';
-    log.exercises.forEach(ex => {
-      const exDiv = document.createElement('div');
-      exDiv.classList.add('history-exercise-log');
-      
-      const setsStr = ex.setData.map((set, i) => `S${i+1}: ${set.weight} lbs x ${set.reps} (RIR ${set.rir})`).join(', ');
-      
-      exDiv.innerHTML = `
-        <div class="history-exercise-title">${ex.name} <span class="tag-badge ${ex.tag.toLowerCase()}" style="font-size:8px; padding:1px 4px;">${ex.tag}</span></div>
-        <div class="history-sets-summary">${setsStr}</div>
-      `;
-      container.appendChild(exDiv);
-    });
-
-    // Enable Editing for history sessions (User Mode only)
-    if (state.auth.mode === 'user') {
-      editBtn.style.display = 'block';
-      editBtn.dataset.date = dateStr;
-    } else {
+    if (log.exercises && log.exercises.length === 0) {
+      container.innerHTML = `<div style="text-align:center; padding: 20px 0; color: var(--accent-lavender); font-size: 13px; font-weight: 500;">Logged Rest Day. Recovered successfully!</div>`;
       editBtn.style.display = 'none';
+    } else {
+      log.exercises.forEach(ex => {
+        const exDiv = document.createElement('div');
+        exDiv.classList.add('history-exercise-log');
+        
+        const setsStr = ex.setData.map((set, i) => `S${i+1}: ${set.weight} lbs x ${set.reps} (RIR ${set.rir})`).join(', ');
+        
+        exDiv.innerHTML = `
+          <div class="history-exercise-title">${ex.name} <span class="tag-badge ${ex.tag.toLowerCase()}" style="font-size:8px; padding:1px 4px;">${ex.tag}</span></div>
+          <div class="history-sets-summary">${setsStr}</div>
+        `;
+        container.appendChild(exDiv);
+      });
+
+      // Enable Editing for history sessions (User Mode only)
+      if (state.auth.mode === 'user') {
+        editBtn.style.display = 'block';
+        editBtn.dataset.date = dateStr;
+      } else {
+        editBtn.style.display = 'none';
+      }
     }
   } else {
     // Unrecorded rest day details
     label.style.display = 'none';
     container.innerHTML = `<div style="text-align:center; padding: 20px 0; color: var(--text-muted); font-size: 13px;">No workout records logged for this day.</div>`;
     editBtn.style.display = 'none';
+  }
+
+  // Handle Log Rest Day button visibility
+  const logRestBtn = document.getElementById('btn-log-historical-rest');
+  if (logRestBtn) {
+    logRestBtn.style.display = 'none';
   }
 
   // Pre-fill retroactive weight field for the selected day
@@ -2093,6 +2136,7 @@ async function restoreHistoryFromSheets() {
     
     // Save to local storage and memory
     state.history = finalHistory;
+    autoLogPastRestDays();
     localStorage.setItem(KEYS.HISTORY, JSON.stringify(state.history));
     
     statusEl.style.color = 'var(--accent-mint)';
@@ -2250,4 +2294,197 @@ function getExerciseTarget(exerciseName) {
     }
   }
   return '';
+}
+
+function calculateConsistencyStats() {
+  const history = state.history || {};
+  
+  // Calculate counts
+  let workoutsCount = 0;
+  let restCount = 0;
+  
+  for (const dateStr in history) {
+    const log = history[dateStr];
+    if (log) {
+      if (log.exercises && log.exercises.length === 0) {
+        restCount++;
+      } else {
+        workoutsCount++;
+      }
+    }
+  }
+  
+  const totalCount = workoutsCount + restCount;
+  
+  // Calculate current streak
+  let streak = 0;
+  const todayStr = getLocalDateString();
+  
+  const todayDate = new Date(todayStr + 'T00:00:00');
+  const yesterdayDate = new Date(todayDate);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayStr = getLocalDateString(yesterdayDate);
+  
+  let startStr = null;
+  if (history[todayStr]) {
+    startStr = todayStr;
+  } else if (history[yesterdayStr]) {
+    startStr = yesterdayStr;
+  }
+  
+  if (startStr) {
+    let checkDate = new Date(startStr + 'T00:00:00');
+    while (true) {
+      const checkStr = getLocalDateString(checkDate);
+      if (history[checkStr]) {
+        streak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+  }
+  
+  // Update the UI
+  document.getElementById('stats-streak-count').textContent = streak;
+  document.getElementById('stats-workouts-count').textContent = workoutsCount;
+  document.getElementById('stats-rest-count').textContent = restCount;
+  document.getElementById('stats-total-count').textContent = totalCount;
+}
+
+function logRestDay(dateStr) {
+  const workoutRecord = {
+    date: dateStr,
+    dayLabel: 'Rest Day',
+    templateDay: '',
+    elapsedTime: '00:00',
+    exercises: []
+  };
+
+  if (state.auth.mode === 'user') {
+    state.history[dateStr] = workoutRecord;
+    localStorage.setItem(KEYS.HISTORY, JSON.stringify(state.history));
+    transmitWebhookLog(workoutRecord).catch(err => console.error("Sheets sync error", err));
+  }
+  
+  // Close dialog if open
+  const dialog = document.getElementById('history-log-modal');
+  if (dialog && dialog.open) {
+    dialog.close();
+  }
+  
+  // Re-render
+  initDashboard();
+  renderCalendar();
+}
+
+function migrateLocalHistoryExerciseNames() {
+  const nameMap = {
+    "incline bicep curl": "Bayesian Curl",
+    "incline dumbbell curl": "Bayesian Curl",
+    "standing or seated calf raise": "Seated Calf Raise",
+    "standing or seated calf raises": "Seated Calf Raise",
+    "calf raise": "Seated Calf Raise",
+    "dumbbell leaning lateral raises": "Cable Lateral Raises",
+    "dumbbell leaning lateral raise": "Cable Lateral Raise"
+  };
+
+  let historyChanged = false;
+  for (const date in state.history) {
+    const workout = state.history[date];
+    if (workout && workout.exercises) {
+      workout.exercises.forEach(ex => {
+        const lowerName = ex.name.trim().toLowerCase();
+        if (nameMap[lowerName]) {
+          ex.name = nameMap[lowerName];
+          historyChanged = true;
+        }
+      });
+    }
+  }
+  if (historyChanged) {
+    localStorage.setItem(KEYS.HISTORY, JSON.stringify(state.history));
+    console.log("Local history exercise names migrated successfully.");
+  }
+}
+
+async function runExerciseMigrationOnSheets() {
+  const webhookUrl = getWebhookUrl();
+  if (!webhookUrl || webhookUrl.includes('YOUR_APPS_SCRIPT_ID')) {
+    return;
+  }
+  
+  const flag = 'aplift_sheets_migration_done_v1';
+  if (localStorage.getItem(flag)) {
+    return; // Already migrated
+  }
+  
+  const payload = {
+    type: "migrate-exercises",
+    renames: [
+      { oldName: "Incline Dumbbell Curl", newName: "Bayesian Curl" },
+      { oldName: "Incline Bicep Curl", newName: "Bayesian Curl" },
+      { oldName: "incline bicep curl", newName: "Bayesian Curl" },
+      { oldName: "Standing or Seated Calf Raise", newName: "Seated Calf Raise" },
+      { oldName: "Standing or Seated Calf Raises", newName: "Seated Calf Raise" },
+      { oldName: "Calf Raise", newName: "Seated Calf Raise" },
+      { oldName: "Dumbbell Leaning Lateral Raises", newName: "Cable Lateral Raises" },
+      { oldName: "Dumbbell Leaning Lateral Raise", newName: "Cable Lateral Raise" }
+    ]
+  };
+  
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+    localStorage.setItem(flag, 'true');
+    console.log("Spreadsheet exercise migration payload dispatched.");
+  } catch (err) {
+    console.error("Spreadsheet migration request failed", err);
+  }
+}
+
+function autoLogPastRestDays() {
+  if (state.auth.mode !== 'user') return;
+  const history = state.history || {};
+  
+  const startStr = "2026-06-01";
+  const startDate = new Date(startStr + 'T00:00:00');
+  const yesterday = new Date(getLocalDateString() + 'T00:00:00');
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  let currentDate = new Date(startDate);
+  let modified = false;
+  
+  while (currentDate <= yesterday) {
+    const dateStr = getLocalDateString(currentDate);
+    if (!history[dateStr]) {
+      const templateDay = getAssignedTemplateDay(dateStr);
+      const config = getRoutineConfig();
+      const routine = config[templateDay];
+      if (routine && routine.isRest) {
+        // Auto-log it!
+        const workoutRecord = {
+          date: dateStr,
+          dayLabel: 'Rest Day',
+          templateDay: '',
+          elapsedTime: '00:00',
+          exercises: []
+        };
+        history[dateStr] = workoutRecord;
+        modified = true;
+      }
+    }
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+  
+  if (modified) {
+    localStorage.setItem(KEYS.HISTORY, JSON.stringify(state.history));
+    renderCalendar();
+  }
 }

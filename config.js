@@ -22,7 +22,7 @@ export const DEFAULT_ROUTINE = {
       { "name": "Leg Press", "tag": "HC", "target": "Quads/Glutes", "sets": 3 },
       { "name": "Leg Extension", "tag": "LLP", "target": "Quads", "sets": 3 },
       { "name": "Seated Leg Curl", "tag": "LLP", "target": "Hamstrings", "sets": 3 },
-      { "name": "Standing or Seated Calf Raise", "tag": "Base", "target": "Calves", "sets": 2 }
+      { "name": "Seated Calf Raise", "tag": "Base", "target": "Calves", "sets": 2 }
     ]
   },
   "Wednesday": {
@@ -32,7 +32,7 @@ export const DEFAULT_ROUTINE = {
       { "name": "Chest-Supported Row", "tag": "HC", "target": "Back", "sets": 3 },
       { "name": "Lat Pulldown", "tag": "HC", "target": "Back", "sets": 3 },
       { "name": "Rear Delt Fly", "tag": "Base", "target": "Rear Delts", "sets": 2 },
-      { "name": "Incline Dumbbell Curl", "tag": "LLP", "target": "Biceps", "sets": 3 }
+      { "name": "Bayesian Curl", "tag": "LLP", "target": "Biceps", "sets": 3 }
     ]
   },
   "Thursday": {
@@ -47,7 +47,7 @@ export const DEFAULT_ROUTINE = {
       { "name": "Standing Barbell Overhead Press", "tag": "HC", "target": "Shoulders", "sets": 3 },
       { "name": "Weighted Dips or Decline Press Machine", "tag": "HC", "target": "Chest/Triceps", "sets": 3 },
       { "name": "Weighted Pull-Ups or Lat-Focused Row", "tag": "HC", "target": "Back", "sets": 3 },
-      { "name": "Dumbbell Leaning Lateral Raises", "tag": "LLP", "target": "Shoulders", "sets": 3 }
+      { "name": "Cable Lateral Raises", "tag": "LLP", "target": "Shoulders", "sets": 3 }
     ]
   },
   "Saturday": {
@@ -113,6 +113,25 @@ export function getRoutineConfig() {
       parsed.Wednesday.label = "Pull";
       modified = true;
     }
+
+    // Migrate old exercise names if they exist in localStorage routine
+    const nameMap = {
+      "Incline Dumbbell Curl": "Bayesian Curl",
+      "Standing or Seated Calf Raise": "Seated Calf Raise",
+      "Dumbbell Leaning Lateral Raises": "Cable Lateral Raises",
+      "Dumbbell Leaning Lateral Raise": "Cable Lateral Raise"
+    };
+    
+    days.forEach(day => {
+      if (parsed[day] && parsed[day].exercises) {
+        parsed[day].exercises.forEach(ex => {
+          if (nameMap[ex.name]) {
+            ex.name = nameMap[ex.name];
+            modified = true;
+          }
+        });
+      }
+    });
 
     if (modified) {
       localStorage.setItem(STORAGE_KEYS.ROUTINE, JSON.stringify(parsed));

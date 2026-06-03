@@ -1,11 +1,10 @@
-const CACHE_NAME = 'aplift-v14';
+const CACHE_NAME = 'aplift-v15';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './config.js',
   './app.js',
-  './checkin_qr.png',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',

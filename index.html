@@ -66,7 +66,7 @@
             <h2 id="dashboard-day-name" style="margin-bottom:0;">Saturday</h2>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
-            <button id="btn-checkin" class="profile-tag">Check In</button>
+            <button id="profile-tag" class="profile-tag">Anmol P.</button>
             <button id="btn-hamburger" class="hamburger-btn" title="Open Menu">
               <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
                 <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
@@ -335,34 +335,40 @@
           </div>
           <div class="dialog-buttons">
             <button type="button" id="btn-edit-historical-workout" class="btn" style="flex:1.2; padding:10px;">Edit Workout</button>
+            <button type="button" id="btn-log-historical-rest" class="btn btn-secondary" style="flex:1.2; padding:10px; display:none;">Log Rest Day</button>
             <button type="submit" value="close" class="btn btn-secondary" style="flex:1; padding:10px;" autofocus>Close</button>
           </div>
         </form>
       </dialog>
 
-      <!-- Check In QR Modal Overlay -->
-      <dialog id="checkin-modal" class="checkin-dialog" style="border: none; background: #111116; padding: 0; outline: none; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0;">
-        <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 20px; box-sizing: border-box;">
+      <!-- Consistency Stats Modal Overlay -->
+      <dialog id="stats-modal" class="stats-dialog" style="border: none; background: transparent; padding: 0; outline: none; margin: auto;">
+        <div class="glass-card" style="padding: 24px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; max-width: 310px; margin: auto; border: 1px solid var(--border-glass); border-radius: 24px; background: rgba(18, 18, 22, 0.95); box-shadow: 0 20px 40px rgba(0,0,0,0.6);">
+          <button id="btn-close-stats" style="position: absolute; top: 12px; right: 12px; background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer; line-height: 1; padding: 4px; font-weight: 300;">&times;</button>
           
-          <!-- Close button top-left -->
-          <button id="btn-close-checkin" style="position: absolute; top: 24px; left: 24px; width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.15); border: none; color: #ffffff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; z-index: 10;">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M1 1l12 12M13 1L1 13"/>
-            </svg>
-          </button>
+          <h3 style="color: var(--text-primary); font-size: 18px; font-weight: 700; margin-bottom: 20px; font-family: 'Outfit', -apple-system, sans-serif; text-align: center;">Consistency Stats</h3>
           
-          <!-- Header Text -->
-          <div style="text-align: center; margin-bottom: 24px;">
-            <h2 style="color: #ffffff; font-size: 24px; font-weight: 700; margin: 0 0 8px 0; font-family: 'Outfit', -apple-system, sans-serif;">You belong here. Let's go!</h2>
-            <p style="color: rgba(255,255,255,0.7); font-size: 14px; margin: 0; font-family: 'Outfit', -apple-system, sans-serif;">One scan to check in and earn points.</p>
+          <!-- Streak Circle Display -->
+          <div style="width: 130px; height: 130px; border-radius: 50%; background: radial-gradient(circle, rgba(191,155,254,0.15) 0%, rgba(191,155,254,0.05) 100%); border: 3px solid var(--accent-lavender); display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 20px; box-shadow: 0 0 15px rgba(191, 155, 254, 0.2);">
+            <span id="stats-streak-count" style="font-size: 36px; font-weight: 800; color: var(--accent-lavender); line-height: 1;">0</span>
+            <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px;">Day Streak</span>
           </div>
-
-          <!-- White Card -->
-          <img src="checkin_qr.png" alt="Check In Card" style="width: 310px; height: auto; border-radius: 28px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); display: block; margin-bottom: 36px;">
-
-          <!-- Footer Text -->
-          <p style="color: rgba(255,255,255,0.6); font-size: 13px; margin: 0; font-family: 'Outfit', -apple-system, sans-serif; text-align: center;">FitPerks points may take 24 hours to be added.</p>
           
+          <!-- Stats Grid -->
+          <div style="width: 100%; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);">
+            <div style="display: flex; justify-content: space-between; font-size: 13px;">
+              <span style="color: var(--text-secondary);">Workouts Logged</span>
+              <span id="stats-workouts-count" style="color: var(--text-primary); font-weight: 600;">0</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px;">
+              <span style="color: var(--text-secondary);">Rest Days Logged</span>
+              <span id="stats-rest-count" style="color: var(--text-primary); font-weight: 600;">0</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 13px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 8px;">
+              <span style="color: var(--text-secondary);">Total Days Tracked</span>
+              <span id="stats-total-count" style="color: var(--text-primary); font-weight: 600;">0</span>
+            </div>
+          </div>
         </div>
       </dialog>
 

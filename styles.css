@@ -1384,8 +1384,8 @@ html:active-view-transition-type(backward)::view-transition-new(root) {
   font-size: 16px;
 }
 
-/* Check In Dialog Backdrop blur */
-.checkin-dialog::backdrop {
+/* Stats Dialog Backdrop blur */
+.stats-dialog::backdrop {
   background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
