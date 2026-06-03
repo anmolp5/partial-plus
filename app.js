@@ -476,6 +476,22 @@ function setupEventListeners() {
       saveBtn.textContent = 'Update';
     }
   });
+
+  // Check In button triggers
+  const checkinBtn = document.getElementById('btn-checkin');
+  const checkinModal = document.getElementById('checkin-modal');
+  const closeCheckinBtn = document.getElementById('btn-close-checkin');
+  
+  if (checkinBtn && checkinModal) {
+    checkinBtn.addEventListener('click', () => {
+      checkinModal.showModal();
+    });
+  }
+  if (closeCheckinBtn && checkinModal) {
+    closeCheckinBtn.addEventListener('click', () => {
+      checkinModal.close();
+    });
+  }
 }
 
 // -------------------------------------------------------------

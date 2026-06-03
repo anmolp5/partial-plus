@@ -66,7 +66,7 @@
             <h2 id="dashboard-day-name" style="margin-bottom:0;">Saturday</h2>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
-            <span class="profile-tag" id="profile-tag">User Mode</span>
+            <button id="btn-checkin" class="btn" style="padding: 6px 12px; font-size: 13px; height: 32px; border-radius: 8px; width: auto; font-weight: 600; margin: 0; background: var(--accent-gradient); color: #000000; border: none; white-space: nowrap;">Check In</button>
             <button id="btn-hamburger" class="hamburger-btn" title="Open Menu">
               <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
                 <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
@@ -338,6 +338,16 @@
             <button type="submit" value="close" class="btn btn-secondary" style="flex:1; padding:10px;" autofocus>Close</button>
           </div>
         </form>
+      </dialog>
+
+      <!-- Check In QR Modal Overlay -->
+      <dialog id="checkin-modal" class="checkin-dialog" style="border: none; background: transparent; padding: 0; outline: none; margin: auto;">
+        <div class="glass-card" style="padding: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; max-width: 300px; margin: auto; border: 1px solid var(--border-glass);">
+          <button id="btn-close-checkin" style="position: absolute; top: 8px; right: 10px; background: none; border: none; color: var(--text-muted); font-size: 26px; cursor: pointer; line-height: 1; padding: 4px; font-weight: 300;">&times;</button>
+          <div style="background: #ffffff; border-radius: 20px; padding: 10px; margin-top: 25px; display: flex; justify-content: center; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <img src="checkin_qr.png" alt="Check In QR Code" style="width: 240px; height: auto; border-radius: 14px; display: block;">
+          </div>
+        </div>
       </dialog>
 
       <!-- Slide-out Side Drawer Menu -->
