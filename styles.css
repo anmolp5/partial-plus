@@ -180,6 +180,10 @@ body {
   overflow: hidden !important;
 }
 
+#dashboard-view.guest-mode {
+  overflow-y: auto !important;
+}
+
 /* Scrollbar styles optimized for Safari */
 .view-panel::-webkit-scrollbar {
   width: 4px;
@@ -539,7 +543,7 @@ p {
 .calendar-section {
   display: flex;
   flex-direction: column;
-  margin-top: 6px;
+  margin-top: 0;
 }
 
 .calendar-header {
@@ -619,6 +623,12 @@ p {
 
 .calendar-day.other-month {
   color: var(--text-dim);
+}
+
+.calendar-day.future {
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.35;
 }
 
 /* History logs list below calendar */

@@ -20,7 +20,8 @@ let state = {
     editDate: ''           // YYYY-MM-DD if editing history
   },
   history: {},             // Map of YYYY-MM-DD -> completed workout object
-  weekSwaps: {}            // Map of weekMondayDate -> { weekdayName: templateDayName }
+  weekSwaps: {},           // Map of weekMondayDate -> { weekdayName: templateDayName }
+  weightHistory: {}        // Map of YYYY-MM-DD -> weight (float)
 };
 
 // LocalStorage Keys
@@ -28,7 +29,8 @@ const KEYS = {
   SESSION: 'partial_plus_session',
   ACTIVE_WORKOUT: 'partial_plus_active_workout',
   HISTORY: 'partial_plus_history',
-  WEEK_SWAPS: 'partial_plus_week_swaps'
+  WEEK_SWAPS: 'partial_plus_week_swaps',
+  WEIGHT_HISTORY: 'partial_plus_weight_history'
 };
 
 // Current Calendar Month display state
@@ -94,6 +96,19 @@ function loadStateFromStorage() {
         console.error("Failed to parse swaps", e);
       }
     }
+
+    const savedWeight = localStorage.getItem(KEYS.WEIGHT_HISTORY);
+    if (savedWeight) {
+      try {
+        state.weightHistory = JSON.parse(savedWeight) || {};
+      } catch (e) {
+        console.error("Failed to parse weight history", e);
+      }
+    } else {
+      state.weightHistory = {};
+    }
+  } else {
+    state.weightHistory = {};
   }
 }
 
@@ -161,6 +176,7 @@ function showView(viewId, direction = 'forward') {
 function updateProfileTag() {
   const tag = document.getElementById('profile-tag');
   const configBtn = document.getElementById('btn-drawer-config');
+  const dashboardView = document.getElementById('dashboard-view');
   if (tag) {
     if (state.auth.mode === 'guest') {
       tag.textContent = 'Guest Mode';
@@ -168,12 +184,14 @@ function updateProfileTag() {
       tag.style.color = 'var(--accent-gold)';
       document.getElementById('guest-banner').style.display = 'block';
       if (configBtn) configBtn.style.display = 'none';
+      if (dashboardView) dashboardView.classList.add('guest-mode');
     } else {
       tag.textContent = 'Active Lifter';
       tag.style.background = 'rgba(6, 214, 160, 0.1)';
       tag.style.color = 'var(--accent-mint)';
       document.getElementById('guest-banner').style.display = 'none';
       if (configBtn) configBtn.style.display = 'flex';
+      if (dashboardView) dashboardView.classList.remove('guest-mode');
     }
   }
 }
@@ -268,6 +286,7 @@ function setupEventListeners() {
     if (confirm('CRITICAL WARNING: This will permanently wipe all local history, saved config, and reset the database. Are you sure?')) {
       localStorage.clear();
       state.history = {};
+      state.weightHistory = {};
       state.weekSwaps = {};
       state.auth = { loggedIn: false, mode: 'user' };
       showView('login-view', 'backward');
@@ -321,6 +340,23 @@ function setupEventListeners() {
       renderActiveCard();
     } else {
       const dialog = document.getElementById('confirm-cancel-modal');
+      const isEditing = state.activeWorkout.isEditingHistorical;
+      
+      // Select elements inside dialog and adjust text dynamically
+      const titleEl = dialog.querySelector('.dialog-header');
+      const bodyEl = dialog.querySelector('.dialog-body');
+      const confirmBtn = dialog.querySelector('.btn-danger');
+      const cancelBtn = dialog.querySelector('.btn-secondary');
+      
+      if (titleEl) titleEl.textContent = isEditing ? 'Cancel Edits?' : 'Cancel Workout?';
+      if (bodyEl) {
+        bodyEl.textContent = isEditing 
+          ? 'Are you sure you want to discard your edits to this workout? All changes made will be lost.' 
+          : "Are you sure you want to cancel today's workout? All current progress will be lost and discarded.";
+      }
+      if (confirmBtn) confirmBtn.textContent = isEditing ? 'Discard Edits' : 'Yes, Cancel Workout';
+      if (cancelBtn) cancelBtn.textContent = isEditing ? 'Keep Editing' : 'No, Keep Tracking';
+      
       dialog.showModal();
     }
   });
@@ -374,6 +410,72 @@ function setupEventListeners() {
   document.getElementById('btn-restore-history').addEventListener('click', () => {
     restoreHistoryFromSheets();
   });
+
+  // Daily Weight dashboard input and history modal input
+  document.getElementById('btn-save-weight').addEventListener('click', () => {
+    const todayStr = getLocalDateString();
+    const val = document.getElementById('dashboard-weight-input').value.trim();
+    if (val === '') {
+      alert('Please enter a valid weight.');
+      return;
+    }
+    saveWeightLog(todayStr, val);
+    renderDashboardWeight();
+    renderCalendar();
+  });
+
+  document.getElementById('btn-edit-weight').addEventListener('click', () => {
+    const inputContainer = document.getElementById('weight-input-container');
+    const displayContainer = document.getElementById('weight-display-container');
+    const saveBtn = document.getElementById('btn-save-weight');
+    if (inputContainer && displayContainer && saveBtn) {
+      inputContainer.style.display = 'flex';
+      displayContainer.style.display = 'none';
+      saveBtn.textContent = 'Update';
+    }
+  });
+
+  document.getElementById('btn-save-history-weight').addEventListener('click', (e) => {
+    const dateStr = e.target.dataset.date;
+    const val = document.getElementById('history-weight-input').value.trim();
+    if (!dateStr) return;
+    saveWeightLog(dateStr, val);
+    
+    // Switch history weight card back to display state if weight was entered
+    const inputContainer = document.getElementById('history-weight-input-container');
+    const displayContainer = document.getElementById('history-weight-display-container');
+    const displayVal = document.getElementById('history-weight-display');
+    const saveBtn = document.getElementById('btn-save-history-weight');
+    
+    if (inputContainer && displayContainer && displayVal && saveBtn) {
+      if (val !== '') {
+        displayVal.textContent = `${parseFloat(val)} lbs`;
+        inputContainer.style.display = 'none';
+        displayContainer.style.display = 'flex';
+      } else {
+        displayVal.textContent = `-- lbs`;
+        saveBtn.textContent = 'Log';
+        inputContainer.style.display = 'flex';
+        displayContainer.style.display = 'none';
+      }
+    }
+
+    if (dateStr === getLocalDateString()) {
+      renderDashboardWeight();
+    }
+    renderCalendar();
+  });
+
+  document.getElementById('btn-edit-history-weight').addEventListener('click', () => {
+    const inputContainer = document.getElementById('history-weight-input-container');
+    const displayContainer = document.getElementById('history-weight-display-container');
+    const saveBtn = document.getElementById('btn-save-history-weight');
+    if (inputContainer && displayContainer && saveBtn) {
+      inputContainer.style.display = 'flex';
+      displayContainer.style.display = 'none';
+      saveBtn.textContent = 'Update';
+    }
+  });
 }
 
 // -------------------------------------------------------------
@@ -381,7 +483,8 @@ function setupEventListeners() {
 // -------------------------------------------------------------
 function getLocalDateString(date) {
   if (!date) {
-    date = new Date();
+    // Override date to June 3, 2026 for testing purposes
+    date = new Date('2026-06-03T12:00:00');
   }
   const offset = date.getTimezoneOffset();
   const localDate = new Date(date.getTime() - (offset*60*1000));
@@ -444,6 +547,9 @@ function initDashboard() {
 
   // Render current day routine details
   renderTodayRoutineDetails(todayStr);
+
+  // Render daily weight display
+  renderDashboardWeight();
 
   // Render Calendar widget
   renderCalendar();
@@ -766,10 +872,14 @@ function createDayCell(dateObj, isOtherMonth) {
     cell.classList.add('completed');
   }
 
-  // Handle tap log detail display
-  cell.addEventListener('click', () => {
-    showCalendarDayDetails(dateStr);
-  });
+  // Handle tap log detail display and future day style
+  if (dateStr > todayStr) {
+    cell.classList.add('future');
+  } else {
+    cell.addEventListener('click', () => {
+      showCalendarDayDetails(dateStr);
+    });
+  }
 
   grid.appendChild(cell);
 }
@@ -827,6 +937,10 @@ function startActiveWorkoutSession() {
   saveActiveWorkoutState();
   showView('workout-view');
   renderActiveCard();
+
+  // Trigger Apple Watch shortcut start signal via x-callback-url (launches WorkoutStart and automatically returns to PWA)
+  const successUrl = encodeURIComponent(window.location.href);
+  window.location.href = `shortcuts://x-callback-url/run-shortcut?name=WorkoutStart&x-success=${successUrl}`;
 }
 
 // Determine if a set is automatically failure protocol
@@ -978,7 +1092,14 @@ function renderActiveCard() {
   document.getElementById('workout-progress-fill').style.width = `${progressPercent}%`;
 
   document.getElementById('exercise-name').textContent = ex.name;
-  document.getElementById('exercise-target').textContent = ex.target;
+  
+  // Resolve muscle target tag (fallback to configuration lookup if missing)
+  const targetMuscle = ex.target || getExerciseTarget(ex.name);
+  const targetEl = document.getElementById('exercise-target');
+  if (targetEl) {
+    targetEl.textContent = targetMuscle || '';
+    targetEl.style.display = targetMuscle ? 'inline-block' : 'none';
+  }
   
   const tagEl = document.getElementById('exercise-tag');
   tagEl.textContent = ex.tag;
@@ -1035,12 +1156,33 @@ function renderActiveCard() {
     container.appendChild(row);
   });
 
+  // Calculate and display last session averages for this exercise
+  const prevStats = getPreviousExerciseStats(ex.name, wk.date);
+  const prevDateEl = document.getElementById('prev-stats-date');
+  const prevWeightEl = document.getElementById('prev-stats-weight');
+  const prevRepsEl = document.getElementById('prev-stats-reps');
+  const prevRirEl = document.getElementById('prev-stats-rir');
+  
+  if (prevDateEl && prevWeightEl && prevRepsEl && prevRirEl) {
+    if (prevStats) {
+      prevDateEl.textContent = formatShortDate(prevStats.date);
+      prevWeightEl.value = prevStats.weight;
+      prevRepsEl.value = prevStats.reps;
+      prevRirEl.value = prevStats.rir;
+    } else {
+      prevDateEl.textContent = '--/--';
+      prevWeightEl.value = '--';
+      prevRepsEl.value = '--';
+      prevRirEl.value = '--';
+    }
+  }
+
   // Footer Navigation Buttons mapping
   const prevBtn = document.getElementById('btn-prev-exercise');
   const nextBtn = document.getElementById('btn-next-exercise');
 
   if (index === 0) {
-    prevBtn.textContent = 'Cancel Workout';
+    prevBtn.textContent = wk.isEditingHistorical ? 'Cancel Edits' : 'Cancel Workout';
     prevBtn.disabled = false;
     prevBtn.classList.add('cancel-style');
   } else {
@@ -1319,6 +1461,12 @@ async function concludeWorkoutSession() {
     }
   }
 
+  // Trigger Apple Watch shortcut end signal via x-callback-url (launches WorkoutEnd and automatically returns to PWA)
+  if (!wk.isEditingHistorical) {
+    const successUrl = encodeURIComponent(window.location.href);
+    window.location.href = `shortcuts://x-callback-url/run-shortcut?name=WorkoutEnd&x-success=${successUrl}`;
+  }
+
   // Clear active state properties
   state.activeWorkout = {
     date: '', dayOfWeek: '', dayLabel: '', templateDay: '', exercises: [], isActive: false, currentExerciseIndex: 0, isEditingHistorical: false, editDate: ''
@@ -1393,7 +1541,7 @@ function showCalendarDayDetails(dateStr) {
       const exDiv = document.createElement('div');
       exDiv.classList.add('history-exercise-log');
       
-      const setsStr = ex.setData.map((set, i) => `S${i+1}: ${set.weight}kg x ${set.reps} (RIR ${set.rir})`).join(', ');
+      const setsStr = ex.setData.map((set, i) => `S${i+1}: ${set.weight} lbs x ${set.reps} (RIR ${set.rir})`).join(', ');
       
       exDiv.innerHTML = `
         <div class="history-exercise-title">${ex.name} <span class="tag-badge ${ex.tag.toLowerCase()}" style="font-size:8px; padding:1px 4px;">${ex.tag}</span></div>
@@ -1414,6 +1562,31 @@ function showCalendarDayDetails(dateStr) {
     label.style.display = 'none';
     container.innerHTML = `<div style="text-align:center; padding: 20px 0; color: var(--text-muted); font-size: 13px;">No workout records logged for this day.</div>`;
     editBtn.style.display = 'none';
+  }
+
+  // Pre-fill retroactive weight field for the selected day
+  const weightInput = document.getElementById('history-weight-input');
+  const histDisplay = document.getElementById('history-weight-display');
+  const histInputContainer = document.getElementById('history-weight-input-container');
+  const histDisplayContainer = document.getElementById('history-weight-display-container');
+  const saveHistWeightBtn = document.getElementById('btn-save-history-weight');
+
+  if (weightInput && histDisplay && histInputContainer && histDisplayContainer && saveHistWeightBtn) {
+    const existingWeight = state.weightHistory[dateStr];
+    saveHistWeightBtn.dataset.date = dateStr;
+    
+    if (existingWeight !== undefined && existingWeight !== null) {
+      weightInput.value = existingWeight;
+      histDisplay.textContent = `${existingWeight} lbs`;
+      histInputContainer.style.display = 'none';
+      histDisplayContainer.style.display = 'flex';
+    } else {
+      weightInput.value = '';
+      histDisplay.textContent = '-- lbs';
+      saveHistWeightBtn.textContent = 'Log';
+      histInputContainer.style.display = 'flex';
+      histDisplayContainer.style.display = 'none';
+    }
   }
 
   dialog.showModal();
@@ -1782,19 +1955,49 @@ async function restoreHistoryFromSheets() {
     if (!response.ok) {
       throw new Error(`HTTP Error: ${response.status}`);
     }
-    const rows = await response.json();
+    const result = await response.json();
     
-    if (rows.status === "error") {
-      throw new Error(rows.message);
+    if (result.status === "error") {
+      throw new Error(result.message);
     }
     
-    if (!Array.isArray(rows)) {
+    let workoutRows = [];
+    let weightRows = [];
+    
+    if (Array.isArray(result)) {
+      workoutRows = result;
+    } else if (result && typeof result === 'object') {
+      workoutRows = result.workouts || [];
+      weightRows = result.weights || [];
+    } else {
       throw new Error("Invalid response format received from Google Sheet.");
     }
     
+    // Restore weight history
+    const reconstructedWeights = {};
+    weightRows.forEach(row => {
+      if (row.date && row.weight !== undefined && row.weight !== null) {
+        // Handle timezone safe local parsing
+        let parsedDate = row.date;
+        if (typeof parsedDate === 'string' && parsedDate.includes('T')) {
+          parsedDate = parsedDate.split('T')[0];
+        }
+        const d = new Date(parsedDate + 'T00:00:00');
+        if (!isNaN(d.getTime())) {
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          const date = `${year}-${month}-${day}`;
+          reconstructedWeights[date] = parseFloat(row.weight);
+        }
+      }
+    });
+    state.weightHistory = reconstructedWeights;
+    localStorage.setItem(KEYS.WEIGHT_HISTORY, JSON.stringify(state.weightHistory));
+    
     // Reconstruct history object
     const reconstructed = {};
-    rows.forEach(row => {
+    workoutRows.forEach(row => {
       // Skip connection verification test logs
       if (row.dayLabel === 'Test Connection' || !row.date || row.date === 'undefined') {
         return;
@@ -1887,4 +2090,150 @@ async function restoreHistoryFromSheets() {
     statusEl.style.color = 'var(--accent-red)';
     statusEl.textContent = `❌ Restore Failed: ${err.message}`;
   }
+}
+
+// -------------------------------------------------------------
+// Body Weight Logging & Webhook Transmit Functions
+// -------------------------------------------------------------
+async function transmitWeightLog(date, weight) {
+  const webhookUrl = getWebhookUrl();
+  if (!webhookUrl || webhookUrl.includes('YOUR_APPS_SCRIPT_ID')) {
+    console.warn("Webhook URL placeholder active, skipping Weight Sheets transmission.");
+    return;
+  }
+
+  const payload = {
+    type: "weight",
+    date: date,
+    weight: parseFloat(weight)
+  };
+
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+    console.log("Weight payload dispatched successfully.");
+  } catch (err) {
+    console.error("Weight payload delivery failure", err);
+    alert("Weight Sync Failed. Your local logs are saved safely in device memory.");
+  }
+}
+
+function saveWeightLog(date, weight) {
+  if (weight === '' || weight === null || weight === undefined) {
+    delete state.weightHistory[date];
+  } else {
+    state.weightHistory[date] = parseFloat(weight);
+  }
+
+  if (state.auth.mode === 'user') {
+    localStorage.setItem(KEYS.WEIGHT_HISTORY, JSON.stringify(state.weightHistory));
+    transmitWeightLog(date, weight).catch(err => console.error("Sheets weight sync error", err));
+  }
+}
+
+function renderDashboardWeight() {
+  const todayStr = getLocalDateString();
+  const display = document.getElementById('dashboard-weight-display');
+  const input = document.getElementById('dashboard-weight-input');
+  const saveBtn = document.getElementById('btn-save-weight');
+  
+  const inputContainer = document.getElementById('weight-input-container');
+  const displayContainer = document.getElementById('weight-display-container');
+  
+  if (display && input && inputContainer && displayContainer && saveBtn) {
+    if (state.weightHistory && state.weightHistory[todayStr] !== undefined) {
+      display.textContent = `${state.weightHistory[todayStr]} lbs`;
+      input.value = state.weightHistory[todayStr];
+      // Show Display State
+      inputContainer.style.display = 'none';
+      displayContainer.style.display = 'flex';
+    } else {
+      display.textContent = `-- lbs`;
+      input.value = '';
+      saveBtn.textContent = 'Log';
+      // Show Input State
+      inputContainer.style.display = 'flex';
+      displayContainer.style.display = 'none';
+    }
+  }
+}
+
+function getPreviousExerciseStats(exerciseName, activeDate) {
+  if (!state.history) return null;
+  
+  const historyDates = Object.keys(state.history)
+    .filter(date => date < activeDate)
+    .sort((a, b) => b.localeCompare(a));
+    
+  for (const date of historyDates) {
+    const workout = state.history[date];
+    if (!workout || !workout.exercises) continue;
+    const exercise = workout.exercises.find(ex => ex.name.trim().toLowerCase() === exerciseName.trim().toLowerCase());
+    if (exercise && exercise.setData && exercise.setData.length > 0) {
+      let totalWeight = 0;
+      let totalReps = 0;
+      let totalRir = 0;
+      let count = 0;
+      
+      exercise.setData.forEach(set => {
+        const w = parseFloat(set.weight);
+        const r = parseFloat(set.reps);
+        const rir = parseFloat(set.rir);
+        
+        if (!isNaN(w) && !isNaN(r)) {
+          totalWeight += w;
+          totalReps += r;
+          totalRir += isNaN(rir) ? 0 : rir;
+          count++;
+        }
+      });
+      
+      if (count > 0) {
+        const avgWeight = (totalWeight / count).toFixed(1);
+        const avgReps = (totalReps / count).toFixed(1);
+        const isBase = exercise.tag === 'Base';
+        const avgRir = isBase ? '0.0' : (totalRir / count).toFixed(1);
+        
+        return {
+          date: date,
+          weight: parseFloat(avgWeight),
+          reps: parseFloat(avgReps),
+          rir: parseFloat(avgRir)
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function formatShortDate(dateStr) {
+  if (!dateStr) return '--/--';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const month = parseInt(parts[1], 10);
+  const day = parseInt(parts[2], 10);
+  return `${month}/${day}`;
+}
+
+function getExerciseTarget(exerciseName) {
+  if (!exerciseName) return '';
+  const config = getRoutineConfig();
+  if (config) {
+    for (const key in config) {
+      const routine = config[key];
+      if (routine && routine.exercises) {
+        const found = routine.exercises.find(e => e.name.trim().toLowerCase() === exerciseName.trim().toLowerCase());
+        if (found && found.target) {
+          return found.target;
+        }
+      }
+    }
+  }
+  return '';
 }

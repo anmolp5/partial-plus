@@ -110,6 +110,26 @@
           </button>
         </div>
         
+        <!-- Daily Weight Card -->
+        <div class="glass-card" id="dashboard-weight-card" style="margin-bottom:10px; padding:10px 14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;">
+            <span style="font-size:15px; font-weight:600; white-space:nowrap;">Daily Weight</span>
+            <div id="weight-input-container" style="display:flex; align-items:center; gap:8px;">
+              <input type="number" id="dashboard-weight-input" step="0.1" placeholder="lbs" class="form-input" style="width:75px; margin:0; padding:8px 10px; font-size:14px; text-align:center; height:36px; border-radius:10px;">
+              <button id="btn-save-weight" class="btn" style="padding:0 12px; margin:0; font-size:13px; height:36px; line-height:36px; border-radius:10px; width:auto; flex:none;">Log</button>
+            </div>
+            <div id="weight-display-container" style="display:none; align-items:center; gap:8px;">
+              <span id="dashboard-weight-display" style="font-size:16px; font-weight:700; color:var(--accent-lavender); text-align:right; white-space:nowrap;">-- lbs</span>
+              <button id="btn-edit-weight" class="btn btn-secondary" style="padding:0; margin:0; width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:10px; flex:none; color:var(--accent-lavender); border: 1px solid var(--border-glass);" title="Edit Weight">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        
         <!-- Calendar Widget -->
         <div class="glass-card calendar-section">
           <div class="calendar-header">
@@ -178,6 +198,23 @@
             
             <div id="set-rows-container" style="display:flex; flex-direction:column; gap:8px;">
               <!-- Dynamically populated rows in JS -->
+            </div>
+            
+            <!-- Last Session Averages Section -->
+            <div id="prev-stats-bar" style="margin-top: 14px; border-top: 1px solid var(--border-glass); padding-top: 10px;">
+              <div style="font-size: 11px; font-weight: 700; color: var(--accent-lavender); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; text-align: left; padding-left: 6px;">Previous Averages</div>
+              <div class="matrix-row" style="opacity: 0.85; background: rgba(191, 155, 254, 0.05); border: 1px solid rgba(191, 155, 254, 0.1); pointer-events: none;">
+                <div id="prev-stats-date" class="set-number" style="font-size: 12px; font-weight: 600; color: var(--text-secondary); text-align: center;">--/--</div>
+                <div class="matrix-input-wrapper">
+                  <input type="text" id="prev-stats-weight" class="matrix-input" value="--" readonly style="text-align: center; color: var(--text-primary); background: transparent; border: none; box-shadow: none;">
+                </div>
+                <div class="matrix-input-wrapper">
+                  <input type="text" id="prev-stats-reps" class="matrix-input" value="--" readonly style="text-align: center; color: var(--text-primary); background: transparent; border: none; box-shadow: none;">
+                </div>
+                <div class="matrix-input-wrapper">
+                  <input type="text" id="prev-stats-rir" class="matrix-input" value="--" readonly style="text-align: center; color: var(--text-primary); background: transparent; border: none; box-shadow: none;">
+                </div>
+              </div>
             </div>
           </div>
           
@@ -272,6 +309,25 @@
         <form method="dialog" class="dialog-content">
           <div class="dialog-header" id="history-log-title">Saturday, May 30</div>
           <div class="dialog-body" style="max-height:300px; overflow-y:auto; padding-right:4px;">
+            <!-- Daily Weight for chosen date at the very top -->
+            <div class="glass-card" id="history-weight-card" style="margin-top: 2px; margin-bottom: 14px; padding: 10px 14px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-glass);">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%;">
+                <span style="font-size:15px; font-weight:600; white-space:nowrap;">Daily Weight</span>
+                <div id="history-weight-input-container" style="display:flex; align-items:center; gap:8px;">
+                  <input type="number" id="history-weight-input" step="0.1" placeholder="lbs" class="form-input" style="width:75px; margin:0; padding:8px 10px; font-size:14px; text-align:center; height:36px; border-radius:10px;">
+                  <button type="button" id="btn-save-history-weight" class="btn" style="padding:0 12px; margin:0; font-size:13px; height:36px; line-height:36px; border-radius:10px; width:auto; flex:none;">Log</button>
+                </div>
+                <div id="history-weight-display-container" style="display:none; align-items:center; gap:8px;">
+                  <span id="history-weight-display" style="font-size:16px; font-weight:700; color:var(--accent-lavender); text-align:right; white-space:nowrap;">-- lbs</span>
+                  <button type="button" id="btn-edit-history-weight" class="btn btn-secondary" style="padding:0; margin:0; width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:10px; flex:none; color:var(--accent-lavender); border: 1px solid var(--border-glass);" title="Edit Weight">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                      <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <h4 id="history-log-routine-label" style="font-weight:600; color:var(--accent-mint); margin-bottom:10px;">Lower</h4>
             <div id="history-log-details-container">
               <!-- Dynamically populated list of completed exercises -->
@@ -279,7 +335,7 @@
           </div>
           <div class="dialog-buttons">
             <button type="button" id="btn-edit-historical-workout" class="btn" style="flex:1.2; padding:10px;">Edit Workout</button>
-            <button type="submit" value="close" class="btn btn-secondary" style="flex:1; padding:10px;">Close</button>
+            <button type="submit" value="close" class="btn btn-secondary" style="flex:1; padding:10px;" autofocus>Close</button>
           </div>
         </form>
       </dialog>
@@ -310,6 +366,9 @@
 
     </div>
   </div>
+
+  <!-- Hidden Background Apple Watch Shortcut Runner -->
+  <iframe id="shortcut-runner" name="shortcut-runner" style="width:0; height:0; border:0; position:absolute; visibility:hidden;"></iframe>
 
   <!-- Config & App Script Modules -->
   <script type="module" src="app.js"></script>
