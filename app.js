@@ -2081,7 +2081,7 @@ async function restoreHistoryFromSheets() {
     localStorage.setItem(KEYS.HISTORY, JSON.stringify(state.history));
     
     statusEl.style.color = 'var(--accent-mint)';
-    statusEl.textContent = `✅ Successfully restored ${Object.keys(finalHistory).length} workout log(s) out of ${rows.length} rows fetched!`;
+    statusEl.textContent = `✅ Successfully restored ${Object.keys(finalHistory).length} workout log(s) out of ${workoutRows.length} rows fetched!`;
     
     // Refresh calendar
     renderCalendar();
