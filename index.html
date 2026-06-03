@@ -66,7 +66,7 @@
             <h2 id="dashboard-day-name" style="margin-bottom:0;">Saturday</h2>
           </div>
           <div style="display:flex; align-items:center; gap:10px;">
-            <button id="btn-checkin" class="btn" style="padding: 6px 12px; font-size: 13px; height: 32px; border-radius: 8px; width: auto; font-weight: 600; margin: 0; background: var(--accent-gradient); color: #000000; border: none; white-space: nowrap;">Check In</button>
+            <button id="btn-checkin" class="profile-tag">Check In</button>
             <button id="btn-hamburger" class="hamburger-btn" title="Open Menu">
               <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
                 <path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
@@ -341,12 +341,28 @@
       </dialog>
 
       <!-- Check In QR Modal Overlay -->
-      <dialog id="checkin-modal" class="checkin-dialog" style="border: none; background: transparent; padding: 0; outline: none; margin: auto;">
-        <div class="glass-card" style="padding: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; max-width: 300px; margin: auto; border: 1px solid var(--border-glass);">
-          <button id="btn-close-checkin" style="position: absolute; top: 8px; right: 10px; background: none; border: none; color: var(--text-muted); font-size: 26px; cursor: pointer; line-height: 1; padding: 4px; font-weight: 300;">&times;</button>
-          <div style="background: #ffffff; border-radius: 20px; padding: 10px; margin-top: 25px; display: flex; justify-content: center; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-            <img src="checkin_qr.png" alt="Check In QR Code" style="width: 240px; height: auto; border-radius: 14px; display: block;">
+      <dialog id="checkin-modal" class="checkin-dialog" style="border: none; background: #111116; padding: 0; outline: none; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; margin: 0;">
+        <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 20px; box-sizing: border-box;">
+          
+          <!-- Close button top-left -->
+          <button id="btn-close-checkin" style="position: absolute; top: 24px; left: 24px; width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,0.15); border: none; color: #ffffff; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s; z-index: 10;">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 1l12 12M13 1L1 13"/>
+            </svg>
+          </button>
+          
+          <!-- Header Text -->
+          <div style="text-align: center; margin-bottom: 24px;">
+            <h2 style="color: #ffffff; font-size: 24px; font-weight: 700; margin: 0 0 8px 0; font-family: 'Outfit', -apple-system, sans-serif;">You belong here. Let's go!</h2>
+            <p style="color: rgba(255,255,255,0.7); font-size: 14px; margin: 0; font-family: 'Outfit', -apple-system, sans-serif;">One scan to check in and earn points.</p>
           </div>
+
+          <!-- White Card -->
+          <img src="checkin_qr.png" alt="Check In Card" style="width: 310px; height: auto; border-radius: 28px; box-shadow: 0 15px 35px rgba(0,0,0,0.5); display: block; margin-bottom: 36px;">
+
+          <!-- Footer Text -->
+          <p style="color: rgba(255,255,255,0.6); font-size: 13px; margin: 0; font-family: 'Outfit', -apple-system, sans-serif; text-align: center;">FitPerks points may take 24 hours to be added.</p>
+          
         </div>
       </dialog>
 

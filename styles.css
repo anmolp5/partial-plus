@@ -439,6 +439,26 @@ p {
   color: var(--accent-lavender);
 }
 
+button.profile-tag {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+}
+
+button.profile-tag:hover {
+  background: rgba(191, 155, 254, 0.2);
+  border-color: rgba(191, 155, 254, 0.3);
+}
+
+button.profile-tag:active {
+  transform: scale(0.96);
+}
+
 /* GitHub Link in Header */
 .github-link {
   color: var(--text-muted);
