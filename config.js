@@ -9,30 +9,30 @@ export const DEFAULT_ROUTINE = {
     "label": "Push",
     "isRest": false,
     "exercises": [
-      { "name": "Incline Dumbbell Press", "tag": "HC", "target": "Chest/Shoulders", "sets": 3 },
-      { "name": "Flat Machine Press", "tag": "HC", "target": "Chest/Shoulders", "sets": 3 },
-      { "name": "Cable Lateral Raises", "tag": "LLP", "target": "Shoulders", "sets": 3 },
-      { "name": "Tricep Overhead Cable Extensions", "tag": "LLP", "target": "Triceps", "sets": 3 }
+      { "name": "Incline Dumbbell Press" },
+      { "name": "Flat Machine Press" },
+      { "name": "Cable Lateral Raises" },
+      { "name": "Tricep Overhead Cable Extensions" }
     ]
   },
   "Tuesday": {
     "label": "Legs",
     "isRest": false,
     "exercises": [
-      { "name": "Leg Press", "tag": "HC", "target": "Quads/Glutes", "sets": 3 },
-      { "name": "Leg Extension", "tag": "LLP", "target": "Quads", "sets": 3 },
-      { "name": "Seated Leg Curl", "tag": "LLP", "target": "Hamstrings", "sets": 3 },
-      { "name": "Seated Calf Raise", "tag": "Base", "target": "Calves", "sets": 2 }
+      { "name": "Leg Press" },
+      { "name": "Leg Extension" },
+      { "name": "Seated Leg Curl" },
+      { "name": "Seated Calf Raise" }
     ]
   },
   "Wednesday": {
     "label": "Pull",
     "isRest": false,
     "exercises": [
-      { "name": "Chest-Supported Row", "tag": "HC", "target": "Mid-Back/Traps", "sets": 3 },
-      { "name": "Lat Pulldown", "tag": "HC", "target": "Lats", "sets": 3 },
-      { "name": "Rear Delt Fly", "tag": "Base", "target": "Rear Delts", "sets": 2 },
-      { "name": "Bayesian Curl", "tag": "LLP", "target": "Biceps", "sets": 3 }
+      { "name": "Chest-Supported Row" },
+      { "name": "Lat Pulldown" },
+      { "name": "Rear Delt Fly" },
+      { "name": "Bayesian Curl" }
     ]
   },
   "Thursday": {
@@ -44,21 +44,21 @@ export const DEFAULT_ROUTINE = {
     "label": "Upper",
     "isRest": false,
     "exercises": [
-      { "name": "Standing Barbell Overhead Press", "tag": "HC", "target": "Shoulders", "sets": 3 },
-      { "name": "Weighted Dips or Decline Press Machine", "tag": "HC", "target": "Chest/Triceps", "sets": 3 },
-      { "name": "Weighted Pull-Ups or Lat-Focused Row", "tag": "HC", "target": "Lats/Rhomboids", "sets": 3 },
-      { "name": "Cable Lateral Raises", "tag": "LLP", "target": "Shoulders", "sets": 3 }
+      { "name": "Standing Barbell Overhead Press" },
+      { "name": "Weighted Dips or Decline Press Machine" },
+      { "name": "Weighted Pull-Ups or Lat-Focused Row" },
+      { "name": "Cable Lateral Raises" }
     ]
   },
   "Saturday": {
     "label": "Lower",
     "isRest": false,
     "exercises": [
-      { "name": "45-Degree Back Extension", "tag": "HC", "target": "Hamstrings/Glutes", "sets": 3 },
-      { "name": "Glute Kickbacks", "tag": "Base", "target": "Glutes", "sets": 2 },
-      { "name": "Leg Extension", "tag": "LLP", "target": "Quads", "sets": 3 },
-      { "name": "Cable Tricep Pushdowns", "tag": "Base", "target": "Triceps", "sets": 2 },
-      { "name": "Standing Cable or Barbell Curl", "tag": "Base", "target": "Biceps", "sets": 2 }
+      { "name": "45-Degree Back Extension" },
+      { "name": "Glute Kickbacks" },
+      { "name": "Leg Extension" },
+      { "name": "Cable Tricep Pushdowns" },
+      { "name": "Standing Cable or Barbell Curl" }
     ]
   },
   "Sunday": {
@@ -66,6 +66,28 @@ export const DEFAULT_ROUTINE = {
     "isRest": true,
     "exercises": []
   }
+};
+
+export const DEFAULT_EXERCISE_REGISTRY = {
+  "Incline Dumbbell Press": { muscle_tags: "Chest/Shoulders", default_tag: "HC" },
+  "Flat Machine Press": { muscle_tags: "Chest/Shoulders", default_tag: "HC" },
+  "Cable Lateral Raises": { muscle_tags: "Shoulders", default_tag: "LLP" },
+  "Tricep Overhead Cable Extensions": { muscle_tags: "Triceps", default_tag: "LLP" },
+  "Leg Press": { muscle_tags: "Quads/Glutes", default_tag: "HC" },
+  "Leg Extension": { muscle_tags: "Quads", default_tag: "LLP" },
+  "Seated Leg Curl": { muscle_tags: "Hamstrings", default_tag: "LLP" },
+  "Seated Calf Raise": { muscle_tags: "Calves", default_tag: "Base" },
+  "Chest-Supported Row": { muscle_tags: "Mid-Back/Traps", default_tag: "HC" },
+  "Lat Pulldown": { muscle_tags: "Lats", default_tag: "HC" },
+  "Rear Delt Fly": { muscle_tags: "Rear Delts", default_tag: "Base" },
+  "Bayesian Curl": { muscle_tags: "Biceps", default_tag: "LLP" },
+  "Standing Barbell Overhead Press": { muscle_tags: "Shoulders", default_tag: "HC" },
+  "Weighted Dips or Decline Press Machine": { muscle_tags: "Chest/Triceps", default_tag: "HC" },
+  "Weighted Pull-Ups or Lat-Focused Row": { muscle_tags: "Lats/Rhomboids", default_tag: "HC" },
+  "45-Degree Back Extension": { muscle_tags: "Hamstrings/Glutes", default_tag: "HC" },
+  "Glute Kickbacks": { muscle_tags: "Glutes", default_tag: "Base" },
+  "Cable Tricep Pushdowns": { muscle_tags: "Triceps", default_tag: "Base" },
+  "Standing Cable or Barbell Curl": { muscle_tags: "Biceps", default_tag: "Base" }
 };
 
 const STORAGE_KEYS = {
@@ -100,12 +122,11 @@ export function getRoutineConfig() {
     });
 
     // Ensure Tuesday is Legs and Wednesday is Pull
-    // If Tuesday contains "Pull" (or has pull exercises) and Wednesday contains "Legs" (or has leg exercises), swap them
     const tuesdayIsPull = parsed.Tuesday && (parsed.Tuesday.label === "Pull" || (parsed.Tuesday.exercises && parsed.Tuesday.exercises.some(e => e.name.includes("Row") || e.name.includes("Pulldown"))));
     const wednesdayIsLegs = parsed.Wednesday && (parsed.Wednesday.label === "Legs" || (parsed.Wednesday.exercises && parsed.Wednesday.exercises.some(e => e.name.includes("Leg"))));
 
     if (tuesdayIsPull && wednesdayIsLegs) {
-      console.log("Migrating older routine configuration (Swapping Tuesday/Wednesday to Legs/Pull)...");
+      console.log("Migrating older routine configuration (Swapping Tuesday/Wednesday)...");
       const temp = parsed.Tuesday;
       parsed.Tuesday = parsed.Wednesday;
       parsed.Wednesday = temp;
@@ -114,7 +135,7 @@ export function getRoutineConfig() {
       modified = true;
     }
 
-    // Migrate old exercise names if they exist in localStorage routine
+    // Migrate names and clean up redundant fields (tag, target, sets) to enforce normalization
     const nameMap = {
       "Incline Dumbbell Curl": "Bayesian Curl",
       "Standing or Seated Calf Raise": "Seated Calf Raise",
@@ -124,29 +145,19 @@ export function getRoutineConfig() {
     
     days.forEach(day => {
       if (parsed[day] && parsed[day].exercises) {
-        parsed[day].exercises.forEach(ex => {
-          if (nameMap[ex.name]) {
-            ex.name = nameMap[ex.name];
+        parsed[day].exercises = parsed[day].exercises.map(ex => {
+          let name = ex.name;
+          if (nameMap[name]) {
+            name = nameMap[name];
             modified = true;
           }
-        });
-      }
-    });
-
-    // Migrate vague muscle targets to specific anatomical groups
-    const targetMap = {
-      "Chest-Supported Row":              "Mid-Back/Traps",
-      "Lat Pulldown":                     "Lats",
-      "Weighted Pull-Ups or Lat-Focused Row": "Lats/Rhomboids"
-    };
-
-    days.forEach(day => {
-      if (parsed[day] && parsed[day].exercises) {
-        parsed[day].exercises.forEach(ex => {
-          if (targetMap[ex.name] && ex.target === "Back") {
-            ex.target = targetMap[ex.name];
+          
+          // If the exercise has extra properties, strip them out to normalize
+          if (ex.tag !== undefined || ex.target !== undefined || ex.sets !== undefined) {
             modified = true;
           }
+          
+          return { name: name };
         });
       }
     });
@@ -167,7 +178,17 @@ export function getRoutineConfig() {
  * @param {Object} config The configuration object to save.
  */
 export function saveRoutineConfig(config) {
-  localStorage.setItem(STORAGE_KEYS.ROUTINE, JSON.stringify(config));
+  // Enforce stripping of redundant metadata fields before saving
+  const normalized = JSON.parse(JSON.stringify(config));
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  days.forEach(day => {
+    if (normalized[day] && normalized[day].exercises) {
+      normalized[day].exercises = normalized[day].exercises.map(ex => ({
+        name: ex.name
+      }));
+    }
+  });
+  localStorage.setItem(STORAGE_KEYS.ROUTINE, JSON.stringify(normalized));
 }
 
 /**

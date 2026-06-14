@@ -1,4 +1,4 @@
-import { getRoutineConfig, saveRoutineConfig, getWebhookUrl, saveWebhookUrl } from './config.js';
+import { getRoutineConfig, saveRoutineConfig, getWebhookUrl, saveWebhookUrl, DEFAULT_EXERCISE_REGISTRY } from './config.js';
 
 // -------------------------------------------------------------
 // Application State Object
@@ -323,16 +323,13 @@ function initExerciseRegistry() {
     if (config[day] && config[day].exercises) {
       config[day].exercises.forEach(ex => {
         if (!state.exerciseRegistry[ex.name]) {
-          // New entry: create from config
+          // New entry: create from DEFAULT_EXERCISE_REGISTRY
+          const defaultEx = DEFAULT_EXERCISE_REGISTRY[ex.name] || {};
           state.exerciseRegistry[ex.name] = {
             notes: '',
-            muscle_tags: ex.target || '',
-            default_tag: ex.tag || 'Base'
+            muscle_tags: defaultEx.muscle_tags || 'Other',
+            default_tag: defaultEx.default_tag || 'Base'
           };
-          modified = true;
-        } else if (state.exerciseRegistry[ex.name].muscle_tags === 'Back' && ex.target && ex.target !== 'Back') {
-          // Migrate vague 'Back' target to specific anatomical value from config
-          state.exerciseRegistry[ex.name].muscle_tags = ex.target;
           modified = true;
         }
       });
