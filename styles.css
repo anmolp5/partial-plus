@@ -1393,7 +1393,12 @@ html:active-view-transition-type(backward)::view-transition-new(root) {
 }
 
 .drawer-item-icon {
-  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 /* Stats Dialog Backdrop blur */
