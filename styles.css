@@ -751,6 +751,7 @@ button.profile-tag:active {
 
 /* Lap Timer Bar */
 .lap-timer-bar {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -761,6 +762,16 @@ button.profile-tag:active {
   border-radius: 12px;
   backdrop-filter: blur(6px);
 }
+
+#lap-time-frozen {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--text-muted) !important;
+  font-weight: 600;
+  margin-left: 0 !important;
+}
+
 
 .lap-info {
   display: flex;
@@ -818,14 +829,15 @@ button.profile-tag:active {
 }
 
 .exercise-meta {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  align-items: flex-start;
 }
 
 .exercise-name {
   font-size: 21px;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .exercise-badges {
@@ -1390,3 +1402,60 @@ html:active-view-transition-type(backward)::view-transition-new(root) {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
+
+/* Protocol Override Slider */
+.protocol-slider-container {
+  position: relative;
+  display: flex;
+  height: 32px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-glass);
+  border-radius: 16px;
+  overflow: hidden;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.slider-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc(33.33% - 2px);
+  border-radius: 14px;
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), background-color 0.3s, border 0.3s;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.protocol-btn, .protocol-option-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  z-index: 2;
+  cursor: pointer;
+  transition: color 0.2s;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  -webkit-tap-highlight-color: transparent;
+  color: #708090; /* Default desaturated Slate Gray */
+}
+
+/* Compact padding-bottom to extend workout card to bottom of viewport */
+#workout-view {
+  padding-bottom: calc(var(--safe-bottom) + 20px) !important;
+}
+
+/* Tabular numbers and monospacing for time values to prevent layout jittering */
+.lap-time, .stopwatch-display {
+  font-variant-numeric: tabular-nums !important;
+  font-family: 'Courier New', Courier, monospace !important;
+}
+
+

@@ -17,11 +17,14 @@ let state = {
     isActive: false,       // In the middle of a workout card session
     currentExerciseIndex: 0,
     isEditingHistorical: false,
-    editDate: ''           // YYYY-MM-DD if editing history
+    editDate: '',          // YYYY-MM-DD if editing history
+    workoutNote: '',       // Transient daily session note
+    lastLapFrozenTime: ''  // Immutably locked split value string
   },
   history: {},             // Map of YYYY-MM-DD -> completed workout object
   weekSwaps: {},           // Map of weekMondayDate -> { weekdayName: templateDayName }
-  weightHistory: {}        // Map of YYYY-MM-DD -> weight (float)
+  weightHistory: {},       // Map of YYYY-MM-DD -> weight (float)
+  exerciseRegistry: {}     // Map of ExerciseName -> { notes: '', muscle_tags: '', default_tag: '' }
 };
 
 // LocalStorage Keys
@@ -30,7 +33,8 @@ const KEYS = {
   ACTIVE_WORKOUT: 'partial_plus_active_workout',
   HISTORY: 'partial_plus_history',
   WEEK_SWAPS: 'partial_plus_week_swaps',
-  WEIGHT_HISTORY: 'partial_plus_weight_history'
+  WEIGHT_HISTORY: 'partial_plus_weight_history',
+  EXERCISE_REGISTRY: 'partial_plus_exercise_registry'
 };
 
 // Current Calendar Month display state
@@ -113,6 +117,49 @@ function loadStateFromStorage() {
   } else {
     state.weightHistory = {};
   }
+
+  // Load exercise registry (Both User and Guest modes, as long as loggedIn)
+  if (state.auth.loggedIn) {
+    const savedRegistry = localStorage.getItem(KEYS.EXERCISE_REGISTRY);
+    if (savedRegistry) {
+      try {
+        state.exerciseRegistry = JSON.parse(savedRegistry) || {};
+      } catch (e) {
+        console.error("Failed to parse exercise registry", e);
+        state.exerciseRegistry = {};
+      }
+    } else {
+      state.exerciseRegistry = {};
+    }
+    initExerciseRegistry();
+  } else {
+    state.exerciseRegistry = {};
+  }
+}
+
+function initExerciseRegistry() {
+  if (!state.exerciseRegistry) {
+    state.exerciseRegistry = {};
+  }
+  const config = getRoutineConfig();
+  let modified = false;
+  for (const day in config) {
+    if (config[day] && config[day].exercises) {
+      config[day].exercises.forEach(ex => {
+        if (!state.exerciseRegistry[ex.name]) {
+          state.exerciseRegistry[ex.name] = {
+            notes: '',
+            muscle_tags: ex.target || '',
+            default_tag: ex.tag || 'Base'
+          };
+          modified = true;
+        }
+      });
+    }
+  }
+  if (modified) {
+    localStorage.setItem(KEYS.EXERCISE_REGISTRY, JSON.stringify(state.exerciseRegistry));
+  }
 }
 
 // Redirect client on load based on active states
@@ -138,6 +185,13 @@ function routeToInitialView() {
             startStopwatch(recovered.stopwatchStartTime, recovered.lapStartTime);
           } else {
             startStopwatch();
+          }
+          if (recovered.lastLapFrozenTime) {
+            const frozenEl = document.getElementById('lap-time-frozen');
+            if (frozenEl) {
+              frozenEl.textContent = recovered.lastLapFrozenTime;
+              frozenEl.style.display = 'inline-block';
+            }
           }
           return;
         }
@@ -217,10 +271,12 @@ function setupEventListeners() {
 
   document.getElementById('btn-guest-login').addEventListener('click', () => {
     state.auth = { loggedIn: true, mode: 'guest' };
+    localStorage.setItem(KEYS.SESSION, JSON.stringify(state.auth));
     // Clear volatile state
     state.history = {};
     state.weekSwaps = {};
     
+    loadStateFromStorage();
     showView('dashboard-view');
     initDashboard();
   });
@@ -413,6 +469,8 @@ function setupEventListeners() {
   document.getElementById('btn-restore-history').addEventListener('click', () => {
     restoreHistoryFromSheets();
   });
+
+  setupNotesAndSubstitutionListeners();
 
   // Daily Weight dashboard input and history modal input
   document.getElementById('btn-save-weight').addEventListener('click', () => {
@@ -957,6 +1015,8 @@ function startActiveWorkoutSession() {
     currentExerciseIndex: 0,
     isEditingHistorical: false,
     editDate: '',
+    workoutNote: '',
+    lastLapFrozenTime: '',
     // Clone config structure and pre-fill matrix variables
     exercises: routine.exercises.map(ex => {
       const data = [];
@@ -1044,6 +1104,12 @@ function stopStopwatch() {
   const lapEl = document.getElementById('lap-time');
   if (stopwatchEl) stopwatchEl.textContent = '00:00';
   if (lapEl) lapEl.textContent = '00:00';
+  
+  const frozenEl = document.getElementById('lap-time-frozen');
+  if (frozenEl) {
+    frozenEl.textContent = '';
+    frozenEl.style.display = 'none';
+  }
 }
 
 function formatElapsed(ms) {
@@ -1077,19 +1143,26 @@ function updateLapDisplay() {
 function formatElapsedWithTenths(ms) {
   const totalSeconds = Math.floor(ms / 1000);
   const hundredths = Math.floor((ms % 1000) / 10);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   
   const pad = (n) => String(n).padStart(2, '0');
-  
-  if (hours > 0) {
-    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}.${pad(hundredths)}`;
-  }
   return `${pad(minutes)}:${pad(seconds)}.${pad(hundredths)}`;
 }
 
 function handleLapButton() {
+  if (!lapStartTime) return;
+  const snapshotMs = Date.now() - lapStartTime;
+  const formatted = formatElapsedWithTenths(snapshotMs);
+  
+  state.activeWorkout.lastLapFrozenTime = formatted;
+  
+  const frozenEl = document.getElementById('lap-time-frozen');
+  if (frozenEl) {
+    frozenEl.textContent = formatted;
+    frozenEl.style.display = 'inline-block';
+  }
+
   // Reset lap timer
   lapStartTime = Date.now();
   updateLapDisplay();
@@ -1217,6 +1290,16 @@ function renderActiveCard() {
       prevRepsEl.value = '--';
       prevRirEl.value = '--';
     }
+  }
+
+  // Populate notepads
+  const setupNotesEl = document.getElementById('exercise-setup-notes');
+  if (setupNotesEl) {
+    setupNotesEl.value = (state.exerciseRegistry[ex.name] && state.exerciseRegistry[ex.name].notes) || '';
+  }
+  const sessionNoteEl = document.getElementById('workout-session-note');
+  if (sessionNoteEl) {
+    sessionNoteEl.value = wk.workoutNote || '';
   }
 
   // Footer Navigation Buttons mapping
@@ -1474,6 +1557,7 @@ async function concludeWorkoutSession() {
     dayLabel: wk.dayLabel,
     templateDay: wk.templateDay,
     elapsedTime: elapsedStr,
+    workoutNote: wk.workoutNote || '',
     exercises: wk.exercises.map(ex => ({
       name: ex.name,
       tag: ex.tag,
@@ -1511,7 +1595,17 @@ async function concludeWorkoutSession() {
 
   // Clear active state properties
   state.activeWorkout = {
-    date: '', dayOfWeek: '', dayLabel: '', templateDay: '', exercises: [], isActive: false, currentExerciseIndex: 0, isEditingHistorical: false, editDate: ''
+    date: '', 
+    dayOfWeek: '', 
+    dayLabel: '', 
+    templateDay: '', 
+    exercises: [], 
+    isActive: false, 
+    currentExerciseIndex: 0, 
+    isEditingHistorical: false, 
+    editDate: '',
+    workoutNote: '',
+    lastLapFrozenTime: ''
   };
 
   showView('dashboard-view', 'backward');
@@ -1530,31 +1624,57 @@ async function transmitWebhookLog(record) {
   }
 
   // Format flattened rows for App Script consumption
-  const rows = [];
-    record.exercises.forEach(ex => {
-      ex.setData.forEach((set, i) => {
-        rows.push({
-          date: record.date,
-          dayLabel: record.dayLabel,
-          workoutTime: record.elapsedTime || '00:00',
-          exerciseName: ex.name,
-          setNumber: i + 1,
-          tag: ex.tag,
-          weight: set.weight,
-          reps: set.reps,
-          rir: set.rir
-        });
+  const logsMatrix = [];
+  record.exercises.forEach(ex => {
+    ex.setData.forEach((set, i) => {
+      logsMatrix.push({
+        exercise_name: ex.name,
+        set_number: i + 1,
+        tag: ex.tag,
+        weight: set.weight,
+        reps: set.reps,
+        rir: set.rir
       });
     });
+  });
+
+  const transactionLogsPayload = logsMatrix.map((set, index) => {
+    return {
+      date: record.date,
+      day_label: record.dayLabel,
+      exercise_name: set.exercise_name,
+      set_number: set.set_number,
+      tag: set.tag,
+      weight: set.weight,
+      reps: set.reps,
+      rir: set.rir,
+      workout_note: (index === 0) ? (state.activeWorkout.workoutNote || "") : ""
+    };
+  });
+
+  const customizedExercisePayload = Object.entries(state.exerciseRegistry).map(([name, config]) => {
+    return {
+      exercise_name: name,
+      exercise_notes: config.notes || "",
+      muscle_tags: config.muscle_tags || "",
+      default_tag: config.default_tag || "Base"
+    };
+  });
+
+  const runtimeBundlePayload = {
+    action: "END_WORKOUT_COMMIT",
+    log_data: transactionLogsPayload,
+    exercise_notes: customizedExercisePayload
+  };
 
   try {
     const response = await fetch(webhookUrl, {
       method: 'POST',
-      mode: 'no-cors', // Avoids CORS hurdles on static scripts
+      mode: 'cors',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(rows)
+      body: JSON.stringify(runtimeBundlePayload)
     });
     console.log("Webhook payload dispatched successfully.");
   } catch (err) {
@@ -1669,6 +1789,8 @@ function startEditingTodayWorkout(dateStr) {
     currentExerciseIndex: 0,
     isEditingHistorical: true,
     editDate: dateStr,
+    workoutNote: log.workoutNote || log.workout_note || '',
+    lastLapFrozenTime: '',
     // Deep clone from historical entries
     exercises: log.exercises.map(ex => ({
       name: ex.name,
@@ -2020,12 +2142,14 @@ async function restoreHistoryFromSheets() {
     
     let workoutRows = [];
     let weightRows = [];
+    let exerciseRows = [];
     
     if (Array.isArray(result)) {
       workoutRows = result;
     } else if (result && typeof result === 'object') {
       workoutRows = result.workouts || [];
       weightRows = result.weights || [];
+      exerciseRows = result.exercises || [];
     } else {
       throw new Error("Invalid response format received from Google Sheet.");
     }
@@ -2052,6 +2176,22 @@ async function restoreHistoryFromSheets() {
     state.weightHistory = reconstructedWeights;
     localStorage.setItem(KEYS.WEIGHT_HISTORY, JSON.stringify(state.weightHistory));
     
+    // Restore exercise metadata registry
+    if (exerciseRows.length > 0) {
+      const reconstructedRegistry = {};
+      exerciseRows.forEach(row => {
+        if (row.exercise_name) {
+          reconstructedRegistry[row.exercise_name] = {
+            notes: row.exercise_notes || '',
+            muscle_tags: row.muscle_tags || '',
+            default_tag: row.default_tag || 'Base'
+          };
+        }
+      });
+      state.exerciseRegistry = reconstructedRegistry;
+      localStorage.setItem(KEYS.EXERCISE_REGISTRY, JSON.stringify(state.exerciseRegistry));
+    }
+    
     // Reconstruct history object
     const reconstructed = {};
     workoutRows.forEach(row => {
@@ -2077,8 +2217,13 @@ async function restoreHistoryFromSheets() {
           dayLabel: row.dayLabel,
           templateDay: '',
           elapsedTime: row.workoutTime || '00:00',
+          workoutNote: '',
           exercises: []
         };
+      }
+      
+      if (row.workoutNote || row.workout_note) {
+        reconstructed[date].workoutNote = row.workoutNote || row.workout_note;
       }
       
       if (row.exerciseName === 'Rest Day' && !row.setNumber) {
@@ -2486,5 +2631,584 @@ function autoLogPastRestDays() {
   if (modified) {
     localStorage.setItem(KEYS.HISTORY, JSON.stringify(state.history));
     renderCalendar();
+  }
+}
+
+// -------------------------------------------------------------
+// Notepad, Substitution & Custom Exercise Helper Modules
+// -------------------------------------------------------------
+let customChips = [];
+let customDefaultTag = 'HC';
+
+function setupNotesAndSubstitutionListeners() {
+  const setupNotesEl = document.getElementById('exercise-setup-notes');
+  if (setupNotesEl) {
+    setupNotesEl.addEventListener('input', (e) => {
+      const activeEx = state.activeWorkout.exercises[state.activeWorkout.currentExerciseIndex];
+      if (activeEx && state.exerciseRegistry[activeEx.name]) {
+        state.exerciseRegistry[activeEx.name].notes = e.target.value;
+        localStorage.setItem(KEYS.EXERCISE_REGISTRY, JSON.stringify(state.exerciseRegistry));
+      }
+    });
+  }
+
+  const sessionNoteEl = document.getElementById('workout-session-note');
+  if (sessionNoteEl) {
+    sessionNoteEl.addEventListener('input', (e) => {
+      state.activeWorkout.workoutNote = e.target.value;
+      saveActiveWorkoutState();
+    });
+  }
+
+  const prevStatsBar = document.getElementById('prev-stats-bar');
+  if (prevStatsBar) {
+    prevStatsBar.addEventListener('click', () => {
+      const activeEx = state.activeWorkout.exercises[state.activeWorkout.currentExerciseIndex];
+      if (!activeEx) return;
+
+      const historyData = getMostRecentExerciseHistory(activeEx.name);
+      const rowsContainer = document.getElementById('historical-sets-rows');
+      const noteTextEl = document.getElementById('historical-session-note-text');
+
+      if (rowsContainer) rowsContainer.innerHTML = '';
+
+      if (historyData && historyData.exercises && historyData.exercises[0]) {
+        const historicalEx = historyData.exercises[0];
+        
+        // Title: Workout Type - Completed Date
+        const dObj = new Date(historyData.date + 'T00:00:00');
+        const fmtDate = dObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        const titleEl = document.getElementById('historical-modal-title');
+        if (titleEl) {
+          titleEl.textContent = `${historyData.dayLabel} - ${fmtDate}`;
+        }
+        
+        // Intensity tag underneath the title
+        const tagContainer = document.getElementById('historical-modal-tag-container');
+        const tagSpan = document.getElementById('historical-modal-tag-span');
+        if (tagContainer && tagSpan) {
+          tagSpan.textContent = historicalEx.tag;
+          tagSpan.className = `tag-badge ${historicalEx.tag.toLowerCase()}`;
+          tagContainer.style.display = 'block';
+        }
+
+        historicalEx.setData.forEach((set, idx) => {
+          const isLocked = isFailureSet(historicalEx.tag, idx);
+          const row = document.createElement('div');
+          row.className = 'matrix-row';
+          row.innerHTML = `
+            <div class="set-number">S${idx + 1}</div>
+            <div class="matrix-input-wrapper">
+              <input type="number" class="matrix-input" placeholder="0" value="${set.weight !== undefined && set.weight !== null ? set.weight : ''}" readonly tabindex="-1" style="pointer-events: none;">
+            </div>
+            <div class="matrix-input-wrapper">
+              <input type="number" class="matrix-input" placeholder="0" value="${set.reps !== undefined && set.reps !== null ? set.reps : ''}" readonly tabindex="-1" style="pointer-events: none;">
+            </div>
+            <div class="matrix-input-wrapper ${isLocked ? 'locked' : ''}">
+              <input type="number" class="matrix-input" placeholder="${isLocked ? '0' : '0-5'}" value="${set.rir !== undefined && set.rir !== null ? set.rir : ''}" readonly tabindex="-1" style="pointer-events: none;" ${isLocked ? 'disabled' : ''}>
+            </div>
+          `;
+          rowsContainer.appendChild(row);
+        });
+
+        if (noteTextEl) {
+          noteTextEl.textContent = historyData.workoutNote || 'No workout note found.';
+        }
+      } else {
+        const titleEl = document.getElementById('historical-modal-title');
+        if (titleEl) {
+          titleEl.textContent = "No Historical Data";
+        }
+        const tagContainer = document.getElementById('historical-modal-tag-container');
+        if (tagContainer) tagContainer.style.display = 'none';
+
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'matrix-row';
+        emptyRow.innerHTML = `
+          <div class="set-number">-</div>
+          <div class="matrix-input-wrapper">
+            <input type="text" class="matrix-input" value="-" readonly tabindex="-1" style="pointer-events: none;">
+          </div>
+          <div class="matrix-input-wrapper">
+            <input type="text" class="matrix-input" value="-" readonly tabindex="-1" style="pointer-events: none;">
+          </div>
+          <div class="matrix-input-wrapper">
+            <input type="text" class="matrix-input" value="-" readonly tabindex="-1" style="pointer-events: none;">
+          </div>
+        `;
+        rowsContainer.appendChild(emptyRow);
+
+        if (noteTextEl) {
+          noteTextEl.textContent = "No historical data found — First Week Baseline Setting";
+        }
+      }
+
+      const modal = document.getElementById('historical-averages-modal');
+      if (modal) modal.showModal();
+    });
+  }
+
+  const btnSwap = document.getElementById('btn-swap-exercise');
+  if (btnSwap) {
+    btnSwap.addEventListener('click', () => {
+      const activeEx = state.activeWorkout.exercises[state.activeWorkout.currentExerciseIndex];
+      if (!activeEx) return;
+
+      document.getElementById('substitution-modal-title').textContent = `Substitute: ${activeEx.name}`;
+      document.getElementById('sub-search-input').value = '';
+      
+      // Reset custom form
+      document.getElementById('custom-inline-form').style.display = 'none';
+      document.getElementById('btn-show-custom-inline').style.display = 'block';
+
+      renderSubstitutionList(activeEx.name, '');
+
+      const modal = document.getElementById('exercise-substitution-modal');
+      if (modal) modal.showModal();
+    });
+  }
+
+  const searchInput = document.getElementById('sub-search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      const activeEx = state.activeWorkout.exercises[state.activeWorkout.currentExerciseIndex];
+      if (activeEx) {
+        renderSubstitutionList(activeEx.name, searchInput.value);
+      }
+    });
+  }
+
+  const btnCloseSubModal = document.getElementById('btn-close-sub-modal');
+  if (btnCloseSubModal) {
+    btnCloseSubModal.addEventListener('click', () => {
+      document.getElementById('exercise-substitution-modal').close();
+    });
+  }
+
+  const btnCancelSub = document.getElementById('btn-cancel-substitution');
+  if (btnCancelSub) {
+    btnCancelSub.addEventListener('click', () => {
+      document.getElementById('exercise-substitution-modal').close();
+    });
+  }
+
+  const btnShowCustom = document.getElementById('btn-show-custom-inline');
+  const customForm = document.getElementById('custom-inline-form');
+  const btnCancelCustom = document.getElementById('btn-cancel-custom-inline');
+  const btnSubmitCustom = document.getElementById('btn-submit-custom-inline');
+  const customMusclesInput = document.getElementById('custom-ex-muscles');
+
+  if (btnShowCustom && customForm) {
+    btnShowCustom.addEventListener('click', () => {
+      btnShowCustom.style.display = 'none';
+      customForm.style.display = 'flex';
+      document.getElementById('custom-ex-name').value = '';
+      customMusclesInput.value = '';
+      customChips = [];
+      customDefaultTag = 'HC';
+      renderCustomChips();
+      updateCustomSliderPosition('HC');
+    });
+  }
+
+  if (btnCancelCustom) {
+    btnCancelCustom.addEventListener('click', () => {
+      customForm.style.display = 'none';
+      btnShowCustom.style.display = 'block';
+    });
+  }
+
+  if (customMusclesInput) {
+    customMusclesInput.addEventListener('input', () => {
+      const val = customMusclesInput.value;
+      if (val.includes(',')) {
+        const parts = val.split(',');
+        for (let i = 0; i < parts.length - 1; i++) {
+          const chipText = parts[i].trim();
+          if (chipText && !customChips.includes(chipText)) {
+            customChips.push(chipText);
+          }
+        }
+        customMusclesInput.value = parts[parts.length - 1];
+        renderCustomChips();
+      }
+    });
+
+    customMusclesInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const chipText = customMusclesInput.value.trim();
+        if (chipText) {
+          if (!customChips.includes(chipText)) {
+            customChips.push(chipText);
+          }
+          customMusclesInput.value = '';
+          renderCustomChips();
+        }
+      }
+    });
+  }
+
+  if (customForm) {
+    const customSliderContainer = customForm.querySelector('.protocol-slider-container');
+    if (customSliderContainer) {
+      const btns = customSliderContainer.querySelectorAll('.protocol-option-btn');
+      btns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          customDefaultTag = btn.getAttribute('data-tag');
+          updateCustomSliderPosition(customDefaultTag);
+        });
+      });
+    }
+  }
+
+  if (btnSubmitCustom) {
+    btnSubmitCustom.addEventListener('click', () => {
+      const nameInput = document.getElementById('custom-ex-name');
+      const newName = nameInput.value.trim();
+      if (!newName) {
+        alert("Please enter an exercise name.");
+        return;
+      }
+
+      if (state.exerciseRegistry[newName]) {
+        alert("An exercise with this name already exists.");
+        return;
+      }
+
+      const leftover = customMusclesInput.value.trim();
+      if (leftover && !customChips.includes(leftover)) {
+        customChips.push(leftover);
+      }
+
+      const muscleTagsStr = customChips.join(', ') || 'Other';
+
+      // Add to client registry
+      state.exerciseRegistry[newName] = {
+        notes: '',
+        muscle_tags: muscleTagsStr,
+        default_tag: customDefaultTag
+      };
+      localStorage.setItem(KEYS.EXERCISE_REGISTRY, JSON.stringify(state.exerciseRegistry));
+
+      // Execute swap
+      const activeIndex = state.activeWorkout.currentExerciseIndex;
+      const oldEx = state.activeWorkout.exercises[activeIndex];
+
+      const newData = [];
+      for (let i = 0; i < oldEx.sets; i++) {
+        const defaultRir = isFailureSet(customDefaultTag, i) ? '0' : '';
+        newData.push({ weight: '', reps: '', rir: defaultRir });
+      }
+
+      state.activeWorkout.exercises[activeIndex] = {
+        name: newName,
+        tag: customDefaultTag,
+        target: muscleTagsStr,
+        sets: oldEx.sets,
+        setData: newData
+      };
+
+      saveActiveWorkoutState();
+      renderActiveCard();
+
+      // Reset
+      customForm.style.display = 'none';
+      btnShowCustom.style.display = 'block';
+      document.getElementById('exercise-substitution-modal').close();
+    });
+  }
+
+  // Light dismiss
+  const histModal = document.getElementById('historical-averages-modal');
+  const subModal = document.getElementById('exercise-substitution-modal');
+  if (histModal) enableLightDismiss(histModal);
+  if (subModal) enableLightDismiss(subModal);
+}
+
+function enableLightDismiss(dialog) {
+  if (!('closedBy' in HTMLDialogElement.prototype)) {
+    dialog.addEventListener('click', (event) => {
+      if (event.target !== dialog) return;
+      const rect = dialog.getBoundingClientRect();
+      const isDialogContent = (
+        rect.top <= event.clientY &&
+        event.clientY <= rect.top + rect.height &&
+        rect.left <= event.clientX &&
+        event.clientX <= rect.left + rect.width
+      );
+      if (isDialogContent) return;
+      dialog.close();
+    });
+  }
+}
+
+function getMostRecentExerciseHistory(exerciseName) {
+  const sortedDates = Object.keys(state.history).sort((a, b) => b.localeCompare(a));
+  for (const date of sortedDates) {
+    const workout = state.history[date];
+    if (workout && workout.exercises) {
+      const ex = workout.exercises.find(e => e.name === exerciseName);
+      if (ex && ex.setData && ex.setData.length > 0) {
+        return {
+          date: date,
+          dayLabel: workout.dayLabel || '',
+          exercises: [ex],
+          workoutNote: workout.workoutNote || ''
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function getSimilarityScore(activeExerciseKey, candidateObject) {
+  const activeData = state.exerciseRegistry[activeExerciseKey];
+  if (!activeData) return 0;
+  const activeMuscles = (activeData.muscle_tags || '').split(/[,\/]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  const candidateMuscles = (candidateObject.muscle_tags || '').split(/[,\/]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  
+  if (activeMuscles.length === 0 || candidateMuscles.length === 0) return 0;
+  
+  let score = 0;
+  if (activeMuscles[0] === candidateMuscles[0]) score += 10.0;
+  
+  activeMuscles.forEach((muscle, aIdx) => {
+    candidateMuscles.forEach((cMuscle, cIdx) => {
+      if (muscle === cMuscle) {
+        if (aIdx === 0 && cIdx !== 0) score += 3.0; 
+        if (aIdx !== 0 && cIdx === 0) score += 2.0; 
+        if (aIdx !== 0 && cIdx !== 0) score += 1.5; 
+      }
+    });
+  });
+  return score;
+}
+
+function renderSubstitutionList(activeExName, searchTerm) {
+  const highSimList = document.getElementById('sub-high-similarity-list');
+  const alphaList = document.getElementById('sub-alphabetical-list');
+  
+  if (!highSimList || !alphaList) return;
+  
+  highSimList.innerHTML = '';
+  alphaList.innerHTML = '';
+  
+  const term = searchTerm.trim().toLowerCase();
+  
+  const candidates = [];
+  for (const name in state.exerciseRegistry) {
+    if (name === activeExName) continue;
+    
+    if (term && !name.toLowerCase().includes(term) && !state.exerciseRegistry[name].muscle_tags.toLowerCase().includes(term)) {
+      continue;
+    }
+    
+    const candidateObj = state.exerciseRegistry[name];
+    const score = getSimilarityScore(activeExName, candidateObj);
+    candidates.push({ name, ...candidateObj, score });
+  }
+  
+  const highSimCandidates = candidates
+    .filter(c => c.score > 0)
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+    
+  const alphaCandidates = candidates
+    .filter(c => c.score === 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+    
+  const highSimSection = document.getElementById('sub-high-similarity-section');
+  if (highSimCandidates.length > 0) {
+    highSimSection.style.display = 'flex';
+    highSimCandidates.forEach(cand => {
+      highSimList.appendChild(createSubstitutionRow(cand, activeExName));
+    });
+  } else {
+    highSimSection.style.display = 'none';
+  }
+  
+  const alphaDivider = document.getElementById('sub-alphabetical-divider');
+  if (alphaCandidates.length > 0) {
+    alphaDivider.style.display = 'flex';
+    alphaCandidates.forEach(cand => {
+      alphaList.appendChild(createSubstitutionRow(cand, activeExName));
+    });
+  } else {
+    alphaDivider.style.display = 'none';
+  }
+}
+
+function createSubstitutionRow(cand, activeExName) {
+  const row = document.createElement('div');
+  row.className = 'substitution-row';
+  row.style.cssText = 'display:flex; flex-direction:column; border:1px solid var(--border-glass); border-radius:12px; background:rgba(255,255,255,0.02); overflow:hidden; transition:all 0.3s; margin-bottom:6px;';
+  
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:12px; cursor:pointer;';
+  
+  const tagClass = cand.default_tag.toLowerCase();
+  
+  header.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:2px; text-align: left;">
+      <span style="font-size:14px; font-weight:600; color:var(--text-primary);">${cand.name}</span>
+      <span style="font-size:11px; color:var(--text-muted);">${cand.muscle_tags}</span>
+    </div>
+    <span class="tag-badge ${tagClass}">${cand.default_tag}</span>
+  `;
+  
+  const expansion = document.createElement('div');
+  expansion.style.cssText = 'display:none; flex-direction:column; gap:10px; padding:0 12px 12px 12px; border-top:1px solid rgba(255,255,255,0.05); background:rgba(255,255,255,0.01);';
+  
+  expansion.innerHTML = `
+    <div style="font-size:11px; font-weight:600; color:var(--text-muted); margin-top:8px; text-align: left;">Choose intensity protocol</div>
+    <div class="protocol-slider-container" style="position:relative; display:flex; height:32px; background:rgba(0,0,0,0.2); border:1px solid var(--border-glass); border-radius:16px; overflow:hidden; padding:2px;">
+      <div class="slider-thumb" style="position:absolute; top:2px; bottom:2px; left:2px; width:calc(33.33% - 2px); border-radius:14px; transition:transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); pointer-events:none;"></div>
+      <button type="button" class="protocol-btn" data-tag="HC" style="flex:1; background:none; border:none; font-family:inherit; font-size:11px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">HC</button>
+      <button type="button" class="protocol-btn" data-tag="LLP" style="flex:1; background:none; border:none; font-family:inherit; font-size:11px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">LLP</button>
+      <button type="button" class="protocol-btn" data-tag="Base" style="flex:1; background:none; border:none; font-family:inherit; font-size:11px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">Base</button>
+    </div>
+    <button type="button" class="btn btn-confirm-swap" style="width:100%; padding:8px; font-size:12px; font-weight:700; margin-top:4px;">Confirm Swap</button>
+  `;
+  
+  row.appendChild(header);
+  row.appendChild(expansion);
+  
+  let selectedTag = cand.default_tag;
+  
+  header.addEventListener('click', () => {
+    const modal = document.getElementById('exercise-substitution-modal');
+    modal.querySelectorAll('.substitution-row').forEach(otherRow => {
+      if (otherRow !== row) {
+        const otherExpansion = otherRow.querySelector('div:nth-child(2)');
+        if (otherExpansion) otherExpansion.style.display = 'none';
+      }
+    });
+    
+    const isExpanded = expansion.style.display === 'flex';
+    expansion.style.display = isExpanded ? 'none' : 'flex';
+    
+    if (!isExpanded) {
+      updateSliderPosition(expansion, selectedTag);
+    }
+  });
+  
+  const sliderButtons = expansion.querySelectorAll('.protocol-btn');
+  sliderButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectedTag = btn.getAttribute('data-tag');
+      updateSliderPosition(expansion, selectedTag);
+    });
+  });
+  
+  const confirmBtn = expansion.querySelector('.btn-confirm-swap');
+  confirmBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    
+    const activeIndex = state.activeWorkout.currentExerciseIndex;
+    const oldEx = state.activeWorkout.exercises[activeIndex];
+    
+    const newData = [];
+    for (let i = 0; i < oldEx.sets; i++) {
+      const defaultRir = isFailureSet(selectedTag, i) ? '0' : '';
+      newData.push({ weight: '', reps: '', rir: defaultRir });
+    }
+    
+    state.activeWorkout.exercises[activeIndex] = {
+      name: cand.name,
+      tag: selectedTag,
+      target: cand.muscle_tags,
+      sets: oldEx.sets,
+      setData: newData
+    };
+    
+    saveActiveWorkoutState();
+    renderActiveCard();
+    
+    document.getElementById('exercise-substitution-modal').close();
+  });
+  
+  return row;
+}
+
+function updateSliderPosition(sliderContainer, activeTag) {
+  const thumb = sliderContainer.querySelector('.slider-thumb');
+  const buttons = sliderContainer.querySelectorAll('.protocol-btn, .protocol-option-btn');
+  
+  let translateX = '0%';
+  let bg = '';
+  let border = '';
+  
+  if (activeTag === 'HC') {
+    translateX = '0%';
+    bg = 'rgba(239, 71, 111, 0.15)';
+    border = '1px solid rgba(239, 71, 111, 0.3)';
+  } else if (activeTag === 'LLP') {
+    translateX = '100%';
+    bg = 'rgba(191, 155, 254, 0.15)';
+    border = '1px solid rgba(191, 155, 254, 0.3)';
+  } else if (activeTag === 'Base') {
+    translateX = '200%';
+    bg = 'rgba(252, 163, 17, 0.15)';
+    border = '1px solid rgba(252, 163, 17, 0.3)';
+  }
+  
+  if (thumb) {
+    thumb.style.transform = `translateX(${translateX})`;
+    thumb.style.background = bg;
+    thumb.style.border = border;
+  }
+  
+  buttons.forEach(btn => {
+    const btnTag = btn.getAttribute('data-tag');
+    if (btnTag === activeTag) {
+      btn.classList.add('active');
+      if (activeTag === 'HC') btn.style.color = 'var(--accent-red)';
+      else if (activeTag === 'LLP') btn.style.color = 'var(--accent-lavender)';
+      else if (activeTag === 'Base') btn.style.color = 'var(--accent-gold)';
+    } else {
+      btn.classList.remove('active');
+      btn.style.color = '#708090'; // desaturated Slate Gray
+    }
+  });
+}
+
+function renderCustomChips() {
+  const container = document.getElementById('custom-chips-container');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  customChips.forEach((chip, idx) => {
+    const chipEl = document.createElement('div');
+    chipEl.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:11px; padding:3px 8px; border-radius:12px; font-weight:600; line-height:1;';
+    
+    if (idx === 0) {
+      chipEl.style.background = 'var(--accent-lavender)';
+      chipEl.style.color = '#0a0a0c';
+      chipEl.textContent = `${chip} (Primary)`;
+    } else {
+      chipEl.style.background = 'rgba(255, 255, 255, 0.08)';
+      chipEl.style.color = 'var(--text-secondary)';
+      chipEl.textContent = chip;
+    }
+    
+    const deleteBtn = document.createElement('span');
+    deleteBtn.innerHTML = '&times;';
+    deleteBtn.style.cssText = 'cursor:pointer; font-weight:bold; font-size:12px; margin-left:2px; display:inline-block; vertical-align:middle;';
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      customChips.splice(idx, 1);
+      renderCustomChips();
+    });
+    
+    chipEl.appendChild(deleteBtn);
+    container.appendChild(chipEl);
+  });
+}
+
+function updateCustomSliderPosition(activeTag) {
+  const container = document.querySelector('#custom-inline-form .protocol-slider-container');
+  if (container) {
+    updateSliderPosition(container, activeTag);
   }
 }
