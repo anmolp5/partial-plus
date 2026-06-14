@@ -985,7 +985,7 @@ button.profile-tag:active {
 
 /* Card bottom navigation */
 #exercise-card {
-  min-height: 560px;
+  min-height: 615px;
   display: flex;
   flex-direction: column;
 }
