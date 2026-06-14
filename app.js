@@ -1304,7 +1304,7 @@ function renderActiveCard() {
   }
   const sessionNoteEl = document.getElementById('workout-session-note');
   if (sessionNoteEl) {
-    sessionNoteEl.value = wk.workoutNote || '';
+    sessionNoteEl.value = ex.workoutNote || '';
   }
 
   // Footer Navigation Buttons mapping
@@ -1472,6 +1472,42 @@ function cancelActiveWorkoutSession() {
   initDashboard();
 }
 
+async function pushExerciseRegistryToSheets(url) {
+  const webhookUrl = url || getWebhookUrl();
+  if (!webhookUrl || webhookUrl.includes('YOUR_APPS_SCRIPT_ID')) {
+    return;
+  }
+
+  const customizedExercisePayload = Object.entries(state.exerciseRegistry).map(([name, config]) => {
+    return {
+      exercise_name: name,
+      exercise_notes: config.notes || "",
+      muscle_tags: config.muscle_tags || "",
+      default_tag: config.default_tag || "Base"
+    };
+  });
+
+  const payload = {
+    action: "END_WORKOUT_COMMIT",
+    log_data: [],
+    exercise_notes: customizedExercisePayload
+  };
+
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+    console.log("Exercise registry synchronized to Google Sheets.");
+  } catch (err) {
+    console.error("Failed to sync exercise registry", err);
+  }
+}
+
 async function testWebhookSync() {
   const urlInput = document.getElementById('webhook-url-input');
   const statusDiv = document.getElementById('webhook-test-status');
@@ -1513,7 +1549,8 @@ async function testWebhookSync() {
 
     if (response.ok || response.status === 200) {
       statusDiv.style.color = 'var(--accent-mint)';
-      statusDiv.textContent = '✅ Sync Successful! Test row appended to Google Sheet.';
+      statusDiv.textContent = '✅ Sync Successful! Test row and exercise registry appended.';
+      pushExerciseRegistryToSheets(url);
     } else {
       throw new Error(`Google Sheets Webhook returned error code: ${response.status}`);
     }
@@ -1529,7 +1566,8 @@ async function testWebhookSync() {
         body: JSON.stringify(testPayload)
       });
       statusDiv.style.color = 'var(--accent-gold)';
-      statusDiv.textContent = '⚠️ Dispatched (opaque mode). Please verify your Google Sheet!';
+      statusDiv.textContent = '⚠️ Dispatched (opaque mode). Exercise registry syncing dispatched.';
+      pushExerciseRegistryToSheets(url);
     } catch (fallbackErr) {
       statusDiv.style.color = 'var(--accent-red)';
       statusDiv.textContent = `❌ Sync Failed: ${fallbackErr.message || fallbackErr}`;
@@ -1562,11 +1600,12 @@ async function concludeWorkoutSession() {
     dayLabel: wk.dayLabel,
     templateDay: wk.templateDay,
     elapsedTime: elapsedStr,
-    workoutNote: wk.workoutNote || '',
+    workoutNote: '',
     exercises: wk.exercises.map(ex => ({
       name: ex.name,
       tag: ex.tag,
       target: ex.target,
+      workoutNote: ex.workoutNote || '',
       setData: ex.setData.map(set => ({
         weight: set.weight || '0',
         reps: set.reps || '0',
@@ -1638,7 +1677,8 @@ async function transmitWebhookLog(record) {
         tag: ex.tag,
         weight: set.weight,
         reps: set.reps,
-        rir: set.rir
+        rir: set.rir,
+        workout_note: ex.workoutNote || ""
       });
     });
   });
@@ -1647,13 +1687,14 @@ async function transmitWebhookLog(record) {
     return {
       date: record.date,
       day_label: record.dayLabel,
+      elapsed_time: record.elapsedTime,
       exercise_name: set.exercise_name,
       set_number: set.set_number,
       tag: set.tag,
       weight: set.weight,
       reps: set.reps,
       rir: set.rir,
-      workout_note: (index === 0) ? (state.activeWorkout.workoutNote || "") : ""
+      workout_note: (set.set_number === 1) ? (set.workout_note || "") : ""
     };
   });
 
@@ -1673,9 +1714,9 @@ async function transmitWebhookLog(record) {
   };
 
   try {
-    const response = await fetch(webhookUrl, {
+    await fetch(webhookUrl, {
       method: 'POST',
-      mode: 'cors',
+      mode: 'no-cors',
       headers: {
         'Content-Type': 'application/json',
       },
@@ -1802,6 +1843,7 @@ function startEditingTodayWorkout(dateStr) {
       tag: ex.tag,
       target: ex.target,
       sets: ex.setData.length,
+      workoutNote: ex.workoutNote || '',
       setData: ex.setData.map(set => ({
         weight: set.weight,
         reps: set.reps,
@@ -2118,6 +2160,25 @@ function initPatternLock() {
   draw();
 }
 
+function getRowValue(row, keys) {
+  if (!row || typeof row !== 'object') return undefined;
+  for (const k of keys) {
+    if (row[k] !== undefined && row[k] !== null) {
+      return row[k];
+    }
+  }
+  // Case-insensitive and fuzzy match (remove spaces, underscores, dashes, and convert to lower case)
+  const normalizedKeys = keys.map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  for (const actualKey in row) {
+    const normActual = actualKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const idx = normalizedKeys.indexOf(normActual);
+    if (idx !== -1) {
+      return row[actualKey];
+    }
+  }
+  return undefined;
+}
+
 async function restoreHistoryFromSheets() {
   const statusEl = document.getElementById('webhook-restore-status');
   if (!statusEl) return;
@@ -2162,9 +2223,11 @@ async function restoreHistoryFromSheets() {
     // Restore weight history
     const reconstructedWeights = {};
     weightRows.forEach(row => {
-      if (row.date && row.weight !== undefined && row.weight !== null) {
+      const dateVal = getRowValue(row, ['date']);
+      const weightVal = getRowValue(row, ['weight']);
+      if (dateVal && weightVal !== undefined && weightVal !== null) {
         // Handle timezone safe local parsing
-        let parsedDate = row.date;
+        let parsedDate = dateVal;
         if (typeof parsedDate === 'string' && parsedDate.includes('T')) {
           parsedDate = parsedDate.split('T')[0];
         }
@@ -2174,7 +2237,7 @@ async function restoreHistoryFromSheets() {
           const month = String(d.getMonth() + 1).padStart(2, '0');
           const day = String(d.getDate()).padStart(2, '0');
           const date = `${year}-${month}-${day}`;
-          reconstructedWeights[date] = parseFloat(row.weight);
+          reconstructedWeights[date] = parseFloat(weightVal);
         }
       }
     });
@@ -2185,11 +2248,15 @@ async function restoreHistoryFromSheets() {
     if (exerciseRows.length > 0) {
       const reconstructedRegistry = {};
       exerciseRows.forEach(row => {
-        if (row.exercise_name) {
-          reconstructedRegistry[row.exercise_name] = {
-            notes: row.exercise_notes || '',
-            muscle_tags: row.muscle_tags || '',
-            default_tag: row.default_tag || 'Base'
+        const name = getRowValue(row, ['exercise_name', 'exerciseName', 'exercise']);
+        const notes = getRowValue(row, ['exercise_notes', 'exerciseNotes', 'notes', 'exercise_note', 'exerciseNote']) || '';
+        const muscleTags = getRowValue(row, ['muscle_tags', 'muscleTags', 'tags', 'muscle_tag', 'muscleTag']) || '';
+        const defaultTag = getRowValue(row, ['default_tag', 'defaultTag', 'default']) || 'Base';
+        if (name) {
+          reconstructedRegistry[name] = {
+            notes: notes,
+            muscle_tags: muscleTags,
+            default_tag: defaultTag
           };
         }
       });
@@ -2200,14 +2267,35 @@ async function restoreHistoryFromSheets() {
     // Reconstruct history object
     const reconstructed = {};
     workoutRows.forEach(row => {
+      const dateVal = getRowValue(row, ['date']);
+      const dayLabel = getRowValue(row, ['day_label', 'dayLabel', 'day']) || '';
+      const exerciseName = getRowValue(row, ['exercise_name', 'exerciseName', 'exercise']) || '';
+      const setNumber = getRowValue(row, ['set_number', 'setNumber', 'set']) || '';
+      const tag = getRowValue(row, ['tag']) || '';
+      const weight = getRowValue(row, ['weight']) || '0';
+      const reps = getRowValue(row, ['reps']) || '0';
+      const rir = getRowValue(row, ['rir']) || '0';
+      const workoutNote = getRowValue(row, ['workout_note', 'workoutNote', 'note']) || '';
+      let elapsedTime = getRowValue(row, ['workout_time', 'workoutTime', 'elapsed_time', 'elapsedTime', 'time']) || '00:00';
+      if (typeof elapsedTime === 'string' && elapsedTime.includes('T')) {
+        const timePart = elapsedTime.split('T')[1];
+        if (timePart) {
+          elapsedTime = timePart.split('.')[0];
+        }
+      }
+
       // Skip connection verification test logs
-      if (row.dayLabel === 'Test Connection' || !row.date || row.date === 'undefined') {
+      if (dayLabel === 'Test Connection' || !dateVal || dateVal === 'undefined') {
         return;
       }
       
-      const d = new Date(row.date);
+      let parsedDate = dateVal;
+      if (typeof parsedDate === 'string' && parsedDate.includes('T')) {
+        parsedDate = parsedDate.split('T')[0];
+      }
+      const d = new Date(parsedDate + 'T00:00:00');
       if (isNaN(d.getTime())) {
-        console.warn(`Skipping invalid date: "${row.date}"`);
+        console.warn(`Skipping invalid date: "${dateVal}"`);
         return;
       }
       
@@ -2219,39 +2307,40 @@ async function restoreHistoryFromSheets() {
       if (!reconstructed[date]) {
         reconstructed[date] = {
           date: date,
-          dayLabel: row.dayLabel,
+          dayLabel: dayLabel,
           templateDay: '',
-          elapsedTime: row.workoutTime || '00:00',
+          elapsedTime: elapsedTime,
           workoutNote: '',
           exercises: []
         };
       }
       
-      if (row.workoutNote || row.workout_note) {
-        reconstructed[date].workoutNote = row.workoutNote || row.workout_note;
-      }
-      
-      if (row.exerciseName === 'Rest Day' && !row.setNumber) {
+      if (exerciseName === 'Rest Day' && !setNumber) {
         return;
       }
       
-      let ex = reconstructed[date].exercises.find(e => e.name === row.exerciseName);
+      let ex = reconstructed[date].exercises.find(e => e.name === exerciseName);
       if (!ex) {
         ex = {
-          name: row.exerciseName,
-          tag: row.tag || '',
+          name: exerciseName,
+          tag: tag,
           target: '',
+          workoutNote: '',
           setData: []
         };
         reconstructed[date].exercises.push(ex);
       }
+
+      if (workoutNote && parseInt(setNumber) === 1) {
+        ex.workoutNote = workoutNote;
+      }
       
-      const setIndex = parseInt(row.setNumber) - 1;
+      const setIndex = parseInt(setNumber) - 1;
       if (!isNaN(setIndex) && setIndex >= 0) {
         ex.setData[setIndex] = {
-          weight: row.weight || '0',
-          reps: row.reps || '0',
-          rir: row.rir || '0'
+          weight: weight,
+          reps: reps,
+          rir: rir
         };
       }
     });
@@ -2660,8 +2749,11 @@ function setupNotesAndSubstitutionListeners() {
   const sessionNoteEl = document.getElementById('workout-session-note');
   if (sessionNoteEl) {
     sessionNoteEl.addEventListener('input', (e) => {
-      state.activeWorkout.workoutNote = e.target.value;
-      saveActiveWorkoutState();
+      const activeEx = state.activeWorkout.exercises[state.activeWorkout.currentExerciseIndex];
+      if (activeEx) {
+        activeEx.workoutNote = e.target.value;
+        saveActiveWorkoutState();
+      }
     });
   }
 
@@ -2959,7 +3051,7 @@ function getMostRecentExerciseHistory(exerciseName) {
           date: date,
           dayLabel: workout.dayLabel || '',
           exercises: [ex],
-          workoutNote: workout.workoutNote || ''
+          workoutNote: ex.workoutNote || ''
         };
       }
     }
