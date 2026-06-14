@@ -988,8 +988,8 @@ button.profile-tag:active {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  margin-top: auto;
-  padding-top: 14px;
+  margin-top: 6px;
+  padding-top: 6px;
 }
 
 .nav-arrow-btn {
@@ -1447,15 +1447,7 @@ html:active-view-transition-type(backward)::view-transition-new(root) {
   color: #708090; /* Default desaturated Slate Gray */
 }
 
-/* Compact padding-bottom to extend workout card to bottom of viewport */
+/* Workout view: let content flow naturally, view-panel scroll handles overflow */
 #workout-view {
   padding-bottom: calc(var(--safe-bottom) + 20px) !important;
 }
-
-/* Tabular numbers and monospacing for time values to prevent layout jittering */
-.lap-time, .stopwatch-display {
-  font-variant-numeric: tabular-nums !important;
-  font-family: 'Courier New', Courier, monospace !important;
-}
-
-

@@ -29,8 +29,8 @@ export const DEFAULT_ROUTINE = {
     "label": "Pull",
     "isRest": false,
     "exercises": [
-      { "name": "Chest-Supported Row", "tag": "HC", "target": "Back", "sets": 3 },
-      { "name": "Lat Pulldown", "tag": "HC", "target": "Back", "sets": 3 },
+      { "name": "Chest-Supported Row", "tag": "HC", "target": "Mid-Back/Traps", "sets": 3 },
+      { "name": "Lat Pulldown", "tag": "HC", "target": "Lats", "sets": 3 },
       { "name": "Rear Delt Fly", "tag": "Base", "target": "Rear Delts", "sets": 2 },
       { "name": "Bayesian Curl", "tag": "LLP", "target": "Biceps", "sets": 3 }
     ]
@@ -46,7 +46,7 @@ export const DEFAULT_ROUTINE = {
     "exercises": [
       { "name": "Standing Barbell Overhead Press", "tag": "HC", "target": "Shoulders", "sets": 3 },
       { "name": "Weighted Dips or Decline Press Machine", "tag": "HC", "target": "Chest/Triceps", "sets": 3 },
-      { "name": "Weighted Pull-Ups or Lat-Focused Row", "tag": "HC", "target": "Back", "sets": 3 },
+      { "name": "Weighted Pull-Ups or Lat-Focused Row", "tag": "HC", "target": "Lats/Rhomboids", "sets": 3 },
       { "name": "Cable Lateral Raises", "tag": "LLP", "target": "Shoulders", "sets": 3 }
     ]
   },
@@ -127,6 +127,24 @@ export function getRoutineConfig() {
         parsed[day].exercises.forEach(ex => {
           if (nameMap[ex.name]) {
             ex.name = nameMap[ex.name];
+            modified = true;
+          }
+        });
+      }
+    });
+
+    // Migrate vague muscle targets to specific anatomical groups
+    const targetMap = {
+      "Chest-Supported Row":              "Mid-Back/Traps",
+      "Lat Pulldown":                     "Lats",
+      "Weighted Pull-Ups or Lat-Focused Row": "Lats/Rhomboids"
+    };
+
+    days.forEach(day => {
+      if (parsed[day] && parsed[day].exercises) {
+        parsed[day].exercises.forEach(ex => {
+          if (targetMap[ex.name] && ex.target === "Back") {
+            ex.target = targetMap[ex.name];
             modified = true;
           }
         });

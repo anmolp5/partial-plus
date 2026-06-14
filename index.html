@@ -179,8 +179,8 @@
         </div>
         
         <!-- Exercise Card Contents -->
-        <div class="glass-card" style="flex:1; display:flex; flex-direction:column; margin-bottom:0;" id="exercise-card">
-          <div class="exercise-meta" style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+        <div class="glass-card" style="display:flex; flex-direction:column; margin-bottom:0;" id="exercise-card">
+          <div class="exercise-meta" style="display:flex; justify-content:space-between; align-items:flex-start; width:100%;">
             <div style="display:flex; flex-direction:column; gap:2px;">
               <h2 id="exercise-name" class="exercise-name" style="margin:0;">Incline Dumbbell Press</h2>
               <div class="exercise-badges">
@@ -188,7 +188,7 @@
                 <span id="exercise-target" class="muscle-badge">Chest/Shoulders</span>
               </div>
             </div>
-            <button id="btn-swap-exercise" style="background:none; border:none; color:var(--accent-lavender); cursor:pointer; padding:4px; display:flex; align-items:center; justify-content:center; flex-shrink: 0;" title="Swap Exercise">
+            <button id="btn-swap-exercise" style="background:none; border:none; color:var(--accent-lavender); cursor:pointer; padding:4px; display:flex; align-items:center; justify-content:center; flex-shrink: 0; margin-top: 1px;" title="Swap Exercise">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                 <path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z"/>
               </svg>
@@ -231,14 +231,14 @@
               <div class="note-block" style="display: flex; flex-direction: column; gap: 2px;">
                 <div style="font-size: 11px; font-weight: 700; color: var(--accent-lavender); text-transform: uppercase; letter-spacing: 0.5px; text-align: left; padding-left: 6px;">Setup Notes</div>
                 <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: 10px; padding: 2px;">
-                  <textarea id="exercise-setup-notes" placeholder="No persistent setup notes defined." style="width: 100%; height: 45px; background: transparent; border: none; outline: none; padding: 6px 8px; color: var(--text-primary); font-family: inherit; font-size: 13px; resize: none; box-sizing: border-box;"></textarea>
+                  <textarea id="exercise-setup-notes" placeholder="No persistent setup notes defined." style="width: 100%; height: 45px; max-height: 120px; overflow-y: auto; background: transparent; border: none; outline: none; padding: 6px 8px; color: var(--text-primary); font-family: inherit; font-size: 13px; resize: none; box-sizing: border-box;"></textarea>
                 </div>
               </div>
               <!-- Session Note -->
               <div class="note-block" style="display: flex; flex-direction: column; gap: 2px;">
                 <div style="font-size: 11px; font-weight: 700; color: var(--accent-lavender); text-transform: uppercase; letter-spacing: 0.5px; text-align: left; padding-left: 6px;">Session Note</div>
                 <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-glass); border-radius: 10px; padding: 2px;">
-                  <textarea id="workout-session-note" placeholder="Add session note..." style="width: 100%; height: 45px; background: transparent; border: none; outline: none; padding: 6px 8px; color: var(--text-primary); font-family: inherit; font-size: 13px; resize: none; box-sizing: border-box;"></textarea>
+                  <textarea id="workout-session-note" placeholder="Add session note..." style="width: 100%; height: 45px; max-height: 120px; overflow-y: auto; background: transparent; border: none; outline: none; padding: 6px 8px; color: var(--text-primary); font-family: inherit; font-size: 13px; resize: none; box-sizing: border-box;"></textarea>
                 </div>
               </div>
             </div>

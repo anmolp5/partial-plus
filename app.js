@@ -147,11 +147,16 @@ function initExerciseRegistry() {
     if (config[day] && config[day].exercises) {
       config[day].exercises.forEach(ex => {
         if (!state.exerciseRegistry[ex.name]) {
+          // New entry: create from config
           state.exerciseRegistry[ex.name] = {
             notes: '',
             muscle_tags: ex.target || '',
             default_tag: ex.tag || 'Base'
           };
+          modified = true;
+        } else if (state.exerciseRegistry[ex.name].muscle_tags === 'Back' && ex.target && ex.target !== 'Back') {
+          // Migrate vague 'Back' target to specific anatomical value from config
+          state.exerciseRegistry[ex.name].muscle_tags = ex.target;
           modified = true;
         }
       });
