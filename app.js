@@ -69,6 +69,182 @@ function initPWA() {
   }
 }
 
+// -------------------------------------------------------------
+// Dynamic Routine Resolver & Fuzzy Name Matching Helpers
+// -------------------------------------------------------------
+function getSetsForTag(tag) {
+  if (tag === 'Base') return 2;
+  return 3;
+}
+
+function levenshteinDistance(s1, s2) {
+  const track = Array(s2.length + 1).fill(null).map(() => Array(s1.length + 1).fill(null));
+  for (let i = 0; i <= s1.length; i++) track[0][i] = i;
+  for (let j = 0; j <= s2.length; j++) track[j][0] = j;
+  for (let j = 1; j <= s2.length; j++) {
+    for (let i = 1; i <= s1.length; i++) {
+      const indicator = s1[i - 1] === s2[j - 1] ? 0 : 1;
+      track[j][i] = Math.min(
+        track[j][i - 1] + 1, // deletion
+        track[j - 1][i] + 1, // insertion
+        track[j - 1][i - 1] + indicator // substitution
+      );
+    }
+  }
+  return track[s2.length][s1.length];
+}
+
+function getWordOverlapScore(s1, s2) {
+  const w1 = new Set(s1.toLowerCase().split(/[^a-z0-9]+/));
+  const w2 = new Set(s2.toLowerCase().split(/[^a-z0-9]+/));
+  const intersection = new Set([...w1].filter(x => w2.has(x)));
+  if (Math.max(w1.size, w2.size) === 0) return 0;
+  return intersection.size / Math.max(w1.size, w2.size);
+}
+
+function getFuzzySimilarity(s1, s2) {
+  const clean1 = s1.trim().toLowerCase();
+  const clean2 = s2.trim().toLowerCase();
+  if (clean1 === clean2) return 1.0;
+  
+  const len = Math.max(clean1.length, clean2.length);
+  if (len === 0) return 1.0;
+  
+  const levSim = (len - levenshteinDistance(clean1, clean2)) / len;
+  const wordOverlap = getWordOverlapScore(clean1, clean2);
+  
+  return Math.max(levSim, wordOverlap);
+}
+
+function resolveRegistryExerciseName(templateName) {
+  if (!state.exerciseRegistry) return templateName;
+  
+  // 1. Exact match (case-insensitive)
+  const keys = Object.keys(state.exerciseRegistry);
+  const exactMatch = keys.find(k => k.trim().toLowerCase() === templateName.trim().toLowerCase());
+  if (exactMatch) return exactMatch;
+  
+  // 2. Fuzzy match
+  let bestMatch = null;
+  let highestScore = 0;
+  
+  keys.forEach(registryName => {
+    const score = getFuzzySimilarity(templateName, registryName);
+    if (score > highestScore) {
+      highestScore = score;
+      bestMatch = registryName;
+    }
+  });
+  
+  if (highestScore >= 0.6 && bestMatch) {
+    console.log(`Fuzzy match detected: auto-healing "${templateName}" to "${bestMatch}" (similarity: ${highestScore.toFixed(2)})`);
+    
+    if (templateName !== bestMatch) {
+      setTimeout(() => {
+        migrateHistoryExerciseName(templateName, bestMatch);
+        dispatchExerciseRenameToSheets(templateName, bestMatch);
+      }, 0);
+    }
+    
+    return bestMatch;
+  }
+  
+  return templateName;
+}
+
+function migrateHistoryExerciseName(oldName, newName) {
+  let changed = false;
+  for (const date in state.history) {
+    const log = state.history[date];
+    if (log && log.exercises) {
+      log.exercises.forEach(ex => {
+        if (ex.name === oldName) {
+          ex.name = newName;
+          changed = true;
+        }
+      });
+    }
+  }
+  if (changed) {
+    localStorage.setItem(KEYS.HISTORY, JSON.stringify(state.history));
+    console.log(`Auto-migrated local history exercise name from "${oldName}" to "${newName}"`);
+    renderCalendar();
+  }
+}
+
+async function dispatchExerciseRenameToSheets(oldName, newName) {
+  const webhookUrl = getWebhookUrl();
+  if (!webhookUrl || webhookUrl.includes('YOUR_APPS_SCRIPT_ID')) return;
+  
+  const payload = {
+    type: "migrate-exercises",
+    renames: [
+      { oldName: oldName, newName: newName }
+    ]
+  };
+  
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    console.log(`Dispatched exercise rename migration from "${oldName}" to "${newName}" to Google Sheets.`);
+  } catch (err) {
+    console.error("Failed to dispatch rename migration to Google Sheets", err);
+  }
+}
+
+function getExpandedRoutineConfig() {
+  const config = getRoutineConfig();
+  if (!config) return config;
+  
+  const expanded = JSON.parse(JSON.stringify(config));
+  let modified = false;
+  
+  for (const day in expanded) {
+    if (expanded[day] && expanded[day].exercises) {
+      expanded[day].exercises = expanded[day].exercises.map(ex => {
+        const resolvedName = resolveRegistryExerciseName(ex.name);
+        if (resolvedName !== ex.name) {
+          ex.name = resolvedName;
+          modified = true;
+        }
+        
+        const reg = state.exerciseRegistry[resolvedName] || {};
+        const resolvedTag = reg.default_tag || ex.tag || 'Base';
+        const resolvedTarget = reg.muscle_tags || ex.target || 'Other';
+        const resolvedSets = getSetsForTag(resolvedTag);
+        
+        return {
+          name: resolvedName,
+          tag: resolvedTag,
+          target: resolvedTarget,
+          sets: resolvedSets
+        };
+      });
+    }
+  }
+  
+  if (modified) {
+    const rawConfig = getRoutineConfig();
+    for (const day in rawConfig) {
+      if (rawConfig[day] && rawConfig[day].exercises) {
+        rawConfig[day].exercises.forEach((rawEx, idx) => {
+          const resolvedEx = expanded[day].exercises[idx];
+          if (resolvedEx) {
+            rawEx.name = resolvedEx.name;
+          }
+        });
+      }
+    }
+    saveRoutineConfig(rawConfig);
+  }
+  
+  return expanded;
+}
+
 // Load application state from localStorage
 function loadStateFromStorage() {
   // Load authentication session
@@ -651,7 +827,7 @@ function initDashboard() {
 
 function renderTodayRoutineDetails(dateStr) {
   const templateDay = getAssignedTemplateDay(dateStr);
-  const config = getRoutineConfig();
+  const config = getExpandedRoutineConfig();
   const routine = config[templateDay];
   
   const labelEl = document.getElementById('today-routine-label');
@@ -785,7 +961,7 @@ async function handleSwapButtonClick() {
     return;
   }
   
-  const config = getRoutineConfig();
+  const config = getExpandedRoutineConfig();
   
   // Check if same template
   if (selectedTemplate === currentTemplate) {
@@ -1002,7 +1178,7 @@ function startActiveWorkoutSession() {
   }
 
   const templateDay = getAssignedTemplateDay(todayStr);
-  const config = getRoutineConfig();
+  const config = getExpandedRoutineConfig();
   const routine = config[templateDay];
 
   if (routine.isRest) {
@@ -2522,7 +2698,10 @@ function formatShortDate(dateStr) {
 
 function getExerciseTarget(exerciseName) {
   if (!exerciseName) return '';
-  const config = getRoutineConfig();
+  if (state.exerciseRegistry && state.exerciseRegistry[exerciseName] && state.exerciseRegistry[exerciseName].muscle_tags) {
+    return state.exerciseRegistry[exerciseName].muscle_tags;
+  }
+  const config = getExpandedRoutineConfig();
   if (config) {
     for (const key in config) {
       const routine = config[key];
@@ -2706,7 +2885,7 @@ function autoLogPastRestDays() {
     const dateStr = getLocalDateString(currentDate);
     if (!history[dateStr]) {
       const templateDay = getAssignedTemplateDay(dateStr);
-      const config = getRoutineConfig();
+      const config = getExpandedRoutineConfig();
       const routine = config[templateDay];
       if (routine && routine.isRest) {
         // Auto-log it!
