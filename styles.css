@@ -984,12 +984,19 @@ button.profile-tag:active {
 }
 
 /* Card bottom navigation */
+#exercise-card {
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+}
+
 .card-navigation {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 6px;
-  padding-top: 6px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-glass);
 }
 
 .nav-arrow-btn {
