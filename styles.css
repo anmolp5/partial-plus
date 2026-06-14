@@ -1451,3 +1451,57 @@ html:active-view-transition-type(backward)::view-transition-new(root) {
 #workout-view {
   padding-bottom: calc(var(--safe-bottom) + 20px) !important;
 }
+
+/* Split Editor GUI Styles */
+.day-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  margin-bottom: 0px;
+}
+
+.day-card:active {
+  transform: none !important;
+}
+
+.day-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.day-card-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent-lavender);
+  margin: 0;
+  text-shadow: 0 0 10px rgba(191, 155, 254, 0.2);
+}
+
+.split-exercise-row {
+  transition: background-color 0.2s ease;
+}
+
+.split-exercise-row:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.btn-edit-protocol {
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.btn-edit-protocol:hover {
+  transform: rotate(30deg);
+  color: var(--accent-lavender) !important;
+}
+
+.btn-delete-exercise {
+  transition: transform 0.2s ease;
+}
+
+.btn-delete-exercise:hover {
+  transform: scale(1.15);
+}
+

@@ -479,6 +479,11 @@ function setupEventListeners() {
     openConfigPanel();
   });
 
+  document.getElementById('btn-drawer-split').addEventListener('click', () => {
+    document.getElementById('side-drawer').classList.remove('active');
+    openSplitPanel();
+  });
+
   document.getElementById('btn-drawer-csv').addEventListener('click', () => {
     document.getElementById('side-drawer').classList.remove('active');
     downloadHistoryCSV();
@@ -499,8 +504,17 @@ function setupEventListeners() {
     initDashboard();
   });
 
+  document.getElementById('btn-close-split').addEventListener('click', () => {
+    showView('dashboard-view', 'backward');
+    initDashboard();
+  });
+
   document.getElementById('btn-save-routine').addEventListener('click', () => {
     saveRoutineFromEditor();
+  });
+
+  document.getElementById('btn-save-split').addEventListener('click', () => {
+    saveSplitChanges();
   });
 
   document.getElementById('btn-save-webhook').addEventListener('click', () => {
@@ -3488,4 +3502,618 @@ function updateCustomSliderPosition(activeTag) {
   if (container) {
     updateSliderPosition(container, activeTag);
   }
+}
+
+// =============================================================
+// PWA SPLIT EDITOR MODULE
+// =============================================================
+
+let splitDraft = null;       // Draft routine config
+let splitDraftRegistry = null; // Draft exercise registry
+let splitCustomChips = [];     // Draft chips for new custom exercise tag
+let splitCustomDefaultTag = 'HC'; // Default tag for custom exercise tag
+let splitActiveDay = null;     // Active day for the add exercise modal
+
+const WORKOUT_TYPICAL_TARGETS = {
+  'Push': 'Chest, Shoulders, Triceps',
+  'Legs': 'Quads, Glutes, Hamstrings, Calves',
+  'Pull': 'Mid-Back, Traps, Lats, Rhomboids, Biceps, Rear Delts',
+  'Upper': 'Chest, Shoulders, Triceps, Lats, Rhomboids, Mid-Back, Traps, Biceps, Rear Delts',
+  'Lower': 'Quads, Glutes, Hamstrings, Calves, Lower Back'
+};
+
+function getWorkoutSimilarityScore(typicalTargetsStr, candidateObject) {
+  const activeMuscles = (typicalTargetsStr || '').split(/[,\/]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  const candidateMuscles = (candidateObject.muscle_tags || '').split(/[,\/]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  
+  if (activeMuscles.length === 0 || candidateMuscles.length === 0) return 0;
+  
+  let score = 0;
+  // If the primary muscle of candidate matches any typical muscle
+  if (activeMuscles.includes(candidateMuscles[0])) {
+    score += 5.0;
+    if (activeMuscles[0] === candidateMuscles[0]) score += 5.0; // Extra weight if primary matches primary
+  }
+  
+  activeMuscles.forEach((muscle) => {
+    if (candidateMuscles.includes(muscle)) {
+      score += 2.0;
+    }
+  });
+  return score;
+}
+
+function openSplitPanel() {
+  const currentConfig = getRoutineConfig();
+  // Deep copy routine template config
+  splitDraft = JSON.parse(JSON.stringify(currentConfig));
+  
+  // Deep copy exercise registry
+  splitDraftRegistry = JSON.parse(JSON.stringify(state.exerciseRegistry || {}));
+  
+  // Render day cards
+  renderSplitEditor();
+  
+  // Show split view
+  showView('split-view');
+  
+  // Setup modal handlers if not already configured
+  setupSplitModalEventHandlers();
+}
+
+function renderSplitEditor() {
+  const container = document.getElementById('split-days-container');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  days.forEach(day => {
+    const card = document.createElement('div');
+    card.className = 'glass-card day-card';
+    card.setAttribute('data-day', day);
+    
+    // Header
+    const header = document.createElement('div');
+    header.className = 'day-card-header';
+    header.innerHTML = `<h3 class="day-card-title">${day}</h3>`;
+    card.appendChild(header);
+    
+    // Selector
+    const selectWrapper = document.createElement('div');
+    selectWrapper.style.cssText = 'display:flex; flex-direction:column; gap:4px;';
+    selectWrapper.innerHTML = `
+      <label style="font-size:11px; font-weight:600; color:var(--text-muted); text-align:left;">Choose Workout</label>
+      <select class="dropdown-select split-workout-select" style="width:100%;">
+        <option value="Push">Push</option>
+        <option value="Legs">Legs</option>
+        <option value="Pull">Pull</option>
+        <option value="Upper">Upper</option>
+        <option value="Lower">Lower</option>
+        <option value="Rest Day">Rest</option>
+      </select>
+    `;
+    card.appendChild(selectWrapper);
+    
+    const select = selectWrapper.querySelector('.split-workout-select');
+    const dayData = splitDraft[day] || { label: 'Rest Day', isRest: true, exercises: [] };
+    
+    // Set active select option
+    if (dayData.isRest) {
+      select.value = 'Rest Day';
+    } else {
+      select.value = dayData.label;
+    }
+    
+    // Exercises wrapper
+    const exListWrapper = document.createElement('div');
+    exListWrapper.className = 'split-day-exercises-wrapper';
+    exListWrapper.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-top:8px;';
+    card.appendChild(exListWrapper);
+    
+    // Add Exercise Button
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'btn btn-secondary btn-add-split-ex';
+    addBtn.style.cssText = 'width:100%; margin-top:4px; border:1px dashed var(--accent-lavender); color:var(--accent-lavender); background:rgba(191,155,254,0.05); font-weight:700;';
+    addBtn.textContent = '+ Add Exercise';
+    card.appendChild(addBtn);
+    
+    container.appendChild(card);
+    
+    // Initial display config
+    updateSplitCardDisplay(day, card, select.value);
+    
+    // Dropdown change listener
+    select.addEventListener('change', () => {
+      const val = select.value;
+      if (val === 'Rest Day') {
+        splitDraft[day] = { label: 'Rest Day', isRest: true, exercises: [] };
+      } else {
+        // If switching from rest to active workout, preserve existing or start empty
+        const oldData = splitDraft[day];
+        splitDraft[day] = {
+          label: val,
+          isRest: false,
+          exercises: (oldData && !oldData.isRest) ? oldData.exercises : []
+        };
+      }
+      updateSplitCardDisplay(day, card, val);
+    });
+    
+    // Add button handler
+    addBtn.addEventListener('click', () => {
+      openSplitAddModal(day);
+    });
+  });
+}
+
+function updateSplitCardDisplay(day, cardEl, selectValue) {
+  const listWrapper = cardEl.querySelector('.split-day-exercises-wrapper');
+  const addBtn = cardEl.querySelector('.btn-add-split-ex');
+  if (!listWrapper || !addBtn) return;
+  
+  if (selectValue === 'Rest Day') {
+    listWrapper.innerHTML = '';
+    listWrapper.style.display = 'none';
+    addBtn.style.display = 'none';
+  } else {
+    listWrapper.style.display = 'flex';
+    addBtn.style.display = 'block';
+    renderSplitDayExercises(day, listWrapper);
+  }
+}
+
+function renderSplitDayExercises(day, listWrapper) {
+  listWrapper.innerHTML = '';
+  const dayData = splitDraft[day];
+  if (!dayData || !dayData.exercises) return;
+  
+  dayData.exercises.forEach((ex, index) => {
+    // Find exercise config in draft registry
+    const reg = splitDraftRegistry[ex.name] || { muscle_tags: 'Other', default_tag: 'Base' };
+    const tagClass = reg.default_tag.toLowerCase();
+    
+    const row = document.createElement('div');
+    row.className = 'split-exercise-row';
+    row.style.cssText = 'display:flex; flex-direction:column; border:1px solid var(--border-glass); border-radius:12px; background:rgba(255,255,255,0.02); overflow:hidden;';
+    
+    const header = document.createElement('div');
+    header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:12px;';
+    header.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:2px; text-align:left;">
+        <span style="font-size:14px; font-weight:600; color:var(--text-primary);">${ex.name}</span>
+        <span style="font-size:11px; color:var(--text-muted);">${reg.muscle_tags}</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span class="tag-badge ${tagClass}" style="text-transform:uppercase;">${reg.default_tag}</span>
+        <button type="button" class="btn-edit-protocol" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer; padding:4px;">⚙️</button>
+        <button type="button" class="btn-delete-exercise" style="background:none; border:none; color:var(--accent-red); font-size:18px; cursor:pointer; padding:4px;">&times;</button>
+      </div>
+    `;
+    row.appendChild(header);
+    
+    // Protocol Slider Panel
+    const sliderPanel = document.createElement('div');
+    sliderPanel.className = 'split-ex-protocol-edit';
+    sliderPanel.style.cssText = 'display:none; flex-direction:column; gap:8px; padding:0 12px 12px 12px; border-top:1px solid rgba(255,255,255,0.05); background:rgba(255,255,255,0.01);';
+    sliderPanel.innerHTML = `
+      <div style="font-size:11px; font-weight:600; color:var(--text-muted); margin-top:8px; text-align:left;">Choose intensity protocol</div>
+      <div class="protocol-slider-container" style="position:relative; display:flex; height:32px; background:rgba(0,0,0,0.2); border:1px solid var(--border-glass); border-radius:16px; overflow:hidden; padding:2px;">
+        <div class="slider-thumb" style="position:absolute; top:2px; bottom:2px; left:2px; width:calc(33.33% - 2px); border-radius:14px; transition:transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); pointer-events:none;"></div>
+        <button type="button" class="protocol-btn" data-tag="HC" style="flex:1; background:none; border:none; font-family:inherit; font-size:11px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">HC</button>
+        <button type="button" class="protocol-btn" data-tag="LLP" style="flex:1; background:none; border:none; font-family:inherit; font-size:11px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">LLP</button>
+        <button type="button" class="protocol-btn" data-tag="Base" style="flex:1; background:none; border:none; font-family:inherit; font-size:11px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">Base</button>
+      </div>
+    `;
+    row.appendChild(sliderPanel);
+    
+    // Toggle slider panel
+    header.querySelector('.btn-edit-protocol').addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isExpanded = sliderPanel.style.display === 'flex';
+      sliderPanel.style.display = isExpanded ? 'none' : 'flex';
+      if (!isExpanded) {
+        updateSliderPosition(sliderPanel, reg.default_tag);
+      }
+    });
+    
+    // Slider button triggers
+    const sliderButtons = sliderPanel.querySelectorAll('.protocol-btn');
+    sliderButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tag = btn.getAttribute('data-tag');
+        
+        // Update draft registry
+        if (splitDraftRegistry[ex.name]) {
+          splitDraftRegistry[ex.name].default_tag = tag;
+        }
+        
+        // Update local badge UI
+        const badge = header.querySelector('.tag-badge');
+        badge.textContent = tag;
+        badge.className = `tag-badge ${tag.toLowerCase()}`;
+        
+        updateSliderPosition(sliderPanel, tag);
+      });
+    });
+    
+    // Delete button trigger
+    header.querySelector('.btn-delete-exercise').addEventListener('click', (e) => {
+      e.stopPropagation();
+      dayData.exercises.splice(index, 1);
+      // snappy re-render of this day card only
+      renderSplitDayExercises(day, listWrapper);
+    });
+    
+    listWrapper.appendChild(row);
+  });
+}
+
+function openSplitAddModal(day) {
+  splitActiveDay = day;
+  
+  const modal = document.getElementById('split-add-exercise-modal');
+  if (!modal) return;
+  
+  // Reset fields
+  document.getElementById('split-add-search-input').value = '';
+  document.getElementById('split-custom-inline-form').style.display = 'none';
+  document.getElementById('btn-show-split-custom-inline').style.display = 'block';
+  
+  renderSplitAddList(day, '');
+  modal.showModal();
+}
+
+function renderSplitAddList(day, searchTerm) {
+  const highSimList = document.getElementById('split-add-high-similarity-list');
+  const alphaList = document.getElementById('split-add-alphabetical-list');
+  if (!highSimList || !alphaList) return;
+  
+  highSimList.innerHTML = '';
+  alphaList.innerHTML = '';
+  
+  const term = searchTerm.trim().toLowerCase();
+  
+  // Get active exercises already on this day to exclude duplicates
+  const currentExNames = (splitDraft[day].exercises || []).map(e => e.name);
+  
+  const workoutType = splitDraft[day].label;
+  const typicalTargets = WORKOUT_TYPICAL_TARGETS[workoutType] || '';
+  
+  const candidates = [];
+  for (const name in splitDraftRegistry) {
+    // Exclude if already added to this day
+    if (currentExNames.includes(name)) continue;
+    
+    // Filter by search term
+    if (term && !name.toLowerCase().includes(term) && !splitDraftRegistry[name].muscle_tags.toLowerCase().includes(term)) {
+      continue;
+    }
+    
+    const candidateObj = splitDraftRegistry[name];
+    const score = getWorkoutSimilarityScore(typicalTargets, candidateObj);
+    candidates.push({ name, ...candidateObj, score });
+  }
+  
+  // Sort candidates
+  const highSimCandidates = candidates
+    .filter(c => c.score > 0)
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+    
+  const alphaCandidates = candidates
+    .filter(c => c.score === 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+    
+  // Similarity Section visibility
+  const highSimSection = document.getElementById('split-add-high-similarity-section');
+  if (highSimCandidates.length > 0) {
+    highSimSection.style.display = 'flex';
+    highSimCandidates.forEach(cand => {
+      highSimList.appendChild(createSplitAddRow(cand));
+    });
+  } else {
+    highSimSection.style.display = 'none';
+  }
+  
+  // Alphabetical Divider visibility
+  const alphaDivider = document.getElementById('split-add-alphabetical-divider');
+  if (alphaCandidates.length > 0) {
+    alphaDivider.style.display = 'flex';
+    alphaCandidates.forEach(cand => {
+      alphaList.appendChild(createSplitAddRow(cand));
+    });
+  } else {
+    alphaDivider.style.display = 'none';
+  }
+}
+
+function createSplitAddRow(cand) {
+  const row = document.createElement('div');
+  row.className = 'substitution-row';
+  row.style.cssText = 'display:flex; flex-direction:column; border:1px solid var(--border-glass); border-radius:12px; background:rgba(255,255,255,0.02); overflow:hidden; transition:all 0.3s; margin-bottom:6px;';
+  
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:12px; cursor:pointer;';
+  
+  const tagClass = cand.default_tag.toLowerCase();
+  header.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:2px; text-align:left;">
+      <span style="font-size:14px; font-weight:600; color:var(--text-primary);">${cand.name}</span>
+      <span style="font-size:11px; color:var(--text-muted);">${cand.muscle_tags}</span>
+    </div>
+    <span class="tag-badge ${tagClass}" style="text-transform:uppercase;">${cand.default_tag}</span>
+  `;
+  
+  const expansion = document.createElement('div');
+  expansion.style.cssText = 'display:none; flex-direction:column; gap:10px; padding:0 12px 12px 12px; border-top:1px solid rgba(255,255,255,0.05); background:rgba(255,255,255,0.01);';
+  expansion.innerHTML = `
+    <div style="font-size:11px; font-weight:600; color:var(--text-muted); margin-top:8px; text-align:left;">Choose intensity protocol</div>
+    <div class="protocol-slider-container" style="position:relative; display:flex; height:32px; background:rgba(0,0,0,0.2); border:1px solid var(--border-glass); border-radius:16px; overflow:hidden; padding:2px;">
+      <div class="slider-thumb" style="position:absolute; top:2px; bottom:2px; left:2px; width:calc(33.33% - 2px); border-radius:14px; transition:transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); pointer-events:none;"></div>
+      <button type="button" class="protocol-btn" data-tag="HC" style="flex:1; background:none; border:none; font-family:inherit; font-size:11px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">HC</button>
+      <button type="button" class="protocol-btn" data-tag="LLP" style="flex:1; background:none; border:none; font-family:inherit; font-size:11px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">LLP</button>
+      <button type="button" class="protocol-btn" data-tag="Base" style="flex:1; background:none; border:none; font-family:inherit; font-size:11px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">Base</button>
+    </div>
+    <button type="button" class="btn btn-confirm-add-ex" style="width:100%; padding:8px; font-size:12px; font-weight:700; margin-top:4px;">Add Exercise</button>
+  `;
+  
+  row.appendChild(header);
+  row.appendChild(expansion);
+  
+  let selectedTag = cand.default_tag;
+  
+  header.addEventListener('click', () => {
+    const modal = document.getElementById('split-add-exercise-modal');
+    modal.querySelectorAll('.substitution-row').forEach(otherRow => {
+      if (otherRow !== row) {
+        const otherExpansion = otherRow.querySelector('div:nth-child(2)');
+        if (otherExpansion) otherExpansion.style.display = 'none';
+      }
+    });
+    
+    const isExpanded = expansion.style.display === 'flex';
+    expansion.style.display = isExpanded ? 'none' : 'flex';
+    if (!isExpanded) {
+      updateSliderPosition(expansion, selectedTag);
+    }
+  });
+  
+  const sliderButtons = expansion.querySelectorAll('.protocol-btn');
+  sliderButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectedTag = btn.getAttribute('data-tag');
+      updateSliderPosition(expansion, selectedTag);
+    });
+  });
+  
+  const confirmBtn = expansion.querySelector('.btn-confirm-add-ex');
+  confirmBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    
+    // Update the protocol in draft registry
+    if (splitDraftRegistry[cand.name]) {
+      splitDraftRegistry[cand.name].default_tag = selectedTag;
+    }
+    
+    // Add to day's exercises
+    const dayData = splitDraft[splitActiveDay];
+    if (dayData) {
+      if (!dayData.exercises) dayData.exercises = [];
+      dayData.exercises.push({ name: cand.name });
+      
+      // Snappy update of the card's exercises list
+      const cardEl = document.querySelector(`.day-card[data-day="${splitActiveDay}"]`);
+      if (cardEl) {
+        const wrapper = cardEl.querySelector('.split-day-exercises-wrapper');
+        renderSplitDayExercises(splitActiveDay, wrapper);
+      }
+    }
+    
+    document.getElementById('split-add-exercise-modal').close();
+  });
+  
+  return row;
+}
+
+let splitModalEventsBound = false;
+function setupSplitModalEventHandlers() {
+  if (splitModalEventsBound) return;
+  splitModalEventsBound = true;
+  
+  const searchInput = document.getElementById('split-add-search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      renderSplitAddList(splitActiveDay, searchInput.value);
+    });
+  }
+  
+  const btnCloseModal = document.getElementById('btn-close-split-add-modal');
+  if (btnCloseModal) {
+    btnCloseModal.addEventListener('click', () => {
+      document.getElementById('split-add-exercise-modal').close();
+    });
+  }
+  
+  const btnShowCustom = document.getElementById('btn-show-split-custom-inline');
+  const customForm = document.getElementById('split-custom-inline-form');
+  const btnCancelCustom = document.getElementById('btn-cancel-split-custom-inline');
+  const btnSubmitCustom = document.getElementById('btn-submit-split-custom-inline');
+  const customMusclesInput = document.getElementById('split-custom-ex-muscles');
+  
+  if (btnShowCustom && customForm) {
+    btnShowCustom.addEventListener('click', () => {
+      btnShowCustom.style.display = 'none';
+      customForm.style.display = 'flex';
+      document.getElementById('split-custom-ex-name').value = '';
+      customMusclesInput.value = '';
+      splitCustomChips = [];
+      splitCustomDefaultTag = 'HC';
+      renderSplitCustomChips();
+      updateSplitCustomSliderPosition('HC');
+    });
+  }
+  
+  if (btnCancelCustom) {
+    btnCancelCustom.addEventListener('click', () => {
+      customForm.style.display = 'none';
+      btnShowCustom.style.display = 'block';
+    });
+  }
+  
+  if (customMusclesInput) {
+    customMusclesInput.addEventListener('input', () => {
+      const val = customMusclesInput.value;
+      if (val.includes(',')) {
+        const parts = val.split(',');
+        for (let i = 0; i < parts.length - 1; i++) {
+          const chipText = parts[i].trim();
+          if (chipText && !splitCustomChips.includes(chipText)) {
+            splitCustomChips.push(chipText);
+          }
+        }
+        customMusclesInput.value = parts[parts.length - 1];
+        renderSplitCustomChips();
+      }
+    });
+    
+    customMusclesInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const chipText = customMusclesInput.value.trim();
+        if (chipText) {
+          if (!splitCustomChips.includes(chipText)) {
+            splitCustomChips.push(chipText);
+          }
+          customMusclesInput.value = '';
+          renderSplitCustomChips();
+        }
+      }
+    });
+  }
+  
+  if (customForm) {
+    const customSliderContainer = customForm.querySelector('.protocol-slider-container');
+    if (customSliderContainer) {
+      const btns = customSliderContainer.querySelectorAll('.protocol-option-btn');
+      btns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          splitCustomDefaultTag = btn.getAttribute('data-tag');
+          updateSplitCustomSliderPosition(splitCustomDefaultTag);
+        });
+      });
+    }
+  }
+  
+  if (btnSubmitCustom) {
+    btnSubmitCustom.addEventListener('click', () => {
+      const nameInput = document.getElementById('split-custom-ex-name');
+      const newName = nameInput.value.trim();
+      if (!newName) {
+        alert("Please enter an exercise name.");
+        return;
+      }
+      
+      if (splitDraftRegistry[newName]) {
+        alert("An exercise with this name already exists.");
+        return;
+      }
+      
+      const leftover = customMusclesInput.value.trim();
+      if (leftover && !splitCustomChips.includes(leftover)) {
+        splitCustomChips.push(leftover);
+      }
+      
+      const muscleTagsStr = splitCustomChips.join(', ') || 'Other';
+      
+      // Save new exercise to draft registry!
+      splitDraftRegistry[newName] = {
+        notes: '',
+        muscle_tags: muscleTagsStr,
+        default_tag: splitCustomDefaultTag
+      };
+      
+      // Add exercise to active day draft
+      const dayData = splitDraft[splitActiveDay];
+      if (dayData) {
+        if (!dayData.exercises) dayData.exercises = [];
+        dayData.exercises.push({ name: newName });
+        
+        // Snappy card update
+        const cardEl = document.querySelector(`.day-card[data-day="${splitActiveDay}"]`);
+        if (cardEl) {
+          const wrapper = cardEl.querySelector('.split-day-exercises-wrapper');
+          renderSplitDayExercises(splitActiveDay, wrapper);
+        }
+      }
+      
+      // Reset custom form
+      customForm.style.display = 'none';
+      btnShowCustom.style.display = 'block';
+      document.getElementById('split-add-exercise-modal').close();
+    });
+  }
+  
+  const modal = document.getElementById('split-add-exercise-modal');
+  if (modal) {
+    enableLightDismiss(modal);
+  }
+}
+
+function renderSplitCustomChips() {
+  const container = document.getElementById('split-custom-chips-container');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  splitCustomChips.forEach((chip, idx) => {
+    const chipEl = document.createElement('div');
+    chipEl.style.cssText = 'display:flex; align-items:center; gap:4px; font-size:11px; padding:3px 8px; border-radius:12px; font-weight:600; line-height:1;';
+    
+    if (idx === 0) {
+      chipEl.style.background = 'var(--accent-lavender)';
+      chipEl.style.color = '#0a0a0c';
+      chipEl.textContent = `${chip} (Primary)`;
+    } else {
+      chipEl.style.background = 'rgba(255, 255, 255, 0.08)';
+      chipEl.style.color = 'var(--text-secondary)';
+      chipEl.textContent = chip;
+    }
+    
+    const deleteBtn = document.createElement('span');
+    deleteBtn.innerHTML = '&times;';
+    deleteBtn.style.cssText = 'cursor:pointer; font-weight:bold; font-size:12px; margin-left:2px; display:inline-block; vertical-align:middle;';
+    deleteBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      splitCustomChips.splice(idx, 1);
+      renderSplitCustomChips();
+    });
+    
+    chipEl.appendChild(deleteBtn);
+    container.appendChild(chipEl);
+  });
+}
+
+function updateSplitCustomSliderPosition(activeTag) {
+  const container = document.querySelector('#split-custom-inline-form .protocol-slider-container');
+  if (container) {
+    updateSliderPosition(container, activeTag);
+  }
+}
+
+function saveSplitChanges() {
+  if (!splitDraft || !splitDraftRegistry) return;
+  
+  // 1. Commit draft registry changes to main registry state
+  state.exerciseRegistry = splitDraftRegistry;
+  localStorage.setItem(KEYS.EXERCISE_REGISTRY, JSON.stringify(state.exerciseRegistry));
+  
+  // 2. Commit draft routine changes using config.js save Routine
+  saveRoutineConfig(splitDraft);
+  
+  alert("Split Configuration and Exercise Registry changes successfully saved.");
+  
+  // 3. Return to dashboard and init
+  showView('dashboard-view', 'backward');
+  initDashboard();
 }

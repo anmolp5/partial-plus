@@ -299,6 +299,25 @@
         </div>
       </section>
 
+      <!-- 5. SPLIT CONFIGURATION VIEW -->
+      <!-- ========================================================= -->
+      <section id="split-view" class="view-panel">
+        <div class="config-header">
+          <button id="btn-close-split" class="back-btn">◀</button>
+          <h1 style="margin-bottom:0;">Split Configuration</h1>
+        </div>
+        
+        <!-- Scrollable Day Cards Container -->
+        <div id="split-days-container" style="display:flex; flex-direction:column; gap:16px; margin-bottom:24px; padding-bottom:10px;">
+          <!-- Day cards dynamically rendered here -->
+        </div>
+        
+        <!-- Save Changes Button container -->
+        <div class="glass-card" style="margin-bottom:30px; padding:16px;">
+          <button id="btn-save-split" class="btn" style="width:100%;">Save Split Config</button>
+        </div>
+      </section>
+
       <!-- ========================================================= -->
       <!-- NATIVE OVERLAYS (DIALOG MODALS) -->
       <!-- ========================================================= -->
@@ -498,6 +517,68 @@
         </form>
       </dialog>
 
+      <!-- Split Add Exercise Modal -->
+      <dialog id="split-add-exercise-modal" class="history-detail-modal" closedby="any" style="max-width:380px; width:95%;">
+        <form method="dialog" class="dialog-content" onsubmit="event.preventDefault();">
+          <div class="dialog-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:16px; font-weight:700; color:var(--accent-lavender);">Add Exercise</span>
+            <button type="button" id="btn-close-split-add-modal" style="background:none; border:none; color:var(--text-muted); font-size:24px; cursor:pointer;">&times;</button>
+          </div>
+          
+          <div class="dialog-body" style="display:flex; flex-direction:column; gap:12px; max-height:400px; overflow-y:auto; padding-right:4px;">
+            <!-- Live Search Interface Input -->
+            <input type="text" id="split-add-search-input" class="form-input" placeholder="Search exercises..." style="width:100%; margin:0; padding:10px; border-radius:10px;">
+            
+            <!-- High-Similarity Matching List Block -->
+            <div id="split-add-high-similarity-section" style="display:flex; flex-direction:column; gap:6px;">
+              <span style="font-size:11px; font-weight:700; color:var(--accent-mint); text-transform:uppercase; letter-spacing:0.5px;">Similar Movements</span>
+              <div id="split-add-high-similarity-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+            </div>
+            
+            <!-- Action Target Strip for Inline Form -->
+            <button type="button" id="btn-show-split-custom-inline" class="btn" style="width:100%; padding:8px; font-size:12px; border:1px dashed var(--accent-lavender); background:rgba(191,155,254,0.05); color:var(--accent-lavender);">+ Custom New Exercise</button>
+            
+            <!-- Custom Inline Form (Initially Hidden) -->
+            <div id="split-custom-inline-form" style="display:none; flex-direction:column; gap:10px; border:1px solid var(--border-glass); padding:12px; border-radius:12px; background:rgba(255,255,255,0.02);">
+              <div style="font-size:12px; font-weight:700; color:var(--accent-lavender);">Create Custom Exercise</div>
+              <input type="text" id="split-custom-ex-name" class="form-input" placeholder="Exercise Name" style="width:100%; margin:0; padding:8px 10px; font-size:13px;">
+              
+              <div style="display:flex; flex-direction:column; gap:4px;">
+                <label style="font-size:11px; font-weight:600; color:var(--text-muted); text-align:left; padding-left:2px;">Muscle Tags (comma separated)</label>
+                <input type="text" id="split-custom-ex-muscles" class="form-input" placeholder="e.g. Quads, Glutes" style="width:100%; margin:0; padding:8px 10px; font-size:13px;">
+                <div id="split-custom-chips-container" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;"></div>
+              </div>
+              
+              <!-- Tag selection slider -->
+              <div style="display:flex; flex-direction:column; gap:4px;">
+                <label style="font-size:11px; font-weight:600; color:var(--text-muted); text-align:left; padding-left:2px;">Choose intensity protocol</label>
+                <div class="protocol-slider-container" style="position:relative; display:flex; height:32px; background:rgba(0,0,0,0.2); border:1px solid var(--border-glass); border-radius:16px; overflow:hidden; padding:2px;">
+                  <div id="split-custom-slider-thumb" class="slider-thumb" style="position:absolute; top:2px; bottom:2px; left:2px; width:calc(33.33% - 2px); border-radius:14px; transition:transform 0.3s cubic-bezier(0.25,1,0.5,1); pointer-events:none;"></div>
+                  <button type="button" class="protocol-option-btn active" data-tag="HC" style="flex:1; background:none; border:none; color:var(--text-primary); font-size:11px; font-weight:700; z-index:1; cursor:pointer;">HC</button>
+                  <button type="button" class="protocol-option-btn" data-tag="LLP" style="flex:1; background:none; border:none; color:var(--text-primary); font-size:11px; font-weight:700; z-index:1; cursor:pointer;">LLP</button>
+                  <button type="button" class="protocol-option-btn" data-tag="Base" style="flex:1; background:none; border:none; color:var(--text-primary); font-size:11px; font-weight:700; z-index:1; cursor:pointer;">Base</button>
+                </div>
+              </div>
+              
+              <div style="display:flex; gap:8px; margin-top:4px;">
+                <button type="button" id="btn-cancel-split-custom-inline" class="btn btn-secondary" style="flex:1; padding:6px; font-size:12px;">Cancel</button>
+                <button type="button" id="btn-submit-split-custom-inline" class="btn" style="flex:1; padding:6px; font-size:12px;">Add Exercise</button>
+              </div>
+            </div>
+            
+            <!-- Split Line Boundary Element -->
+            <div id="split-add-alphabetical-divider" style="display:flex; align-items:center; gap:10px; margin:4px 0;">
+              <hr style="flex:1; border:none; border-top:1px solid var(--border-glass);">
+              <span style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Other Movements (A-Z)</span>
+              <hr style="flex:1; border:none; border-top:1px solid var(--border-glass);">
+            </div>
+            
+            <!-- Alphabetical Fallback List Block -->
+            <div id="split-add-alphabetical-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+          </div>
+        </form>
+      </dialog>
+
       <!-- Slide-out Side Drawer Menu -->
       <div id="side-drawer" class="drawer-overlay">
         <div class="drawer-content">
@@ -508,6 +589,9 @@
           <nav class="drawer-nav">
             <button id="btn-drawer-config" class="drawer-item">
               <span class="drawer-item-icon">⚙️</span> Settings (JSON Routine)
+            </button>
+            <button id="btn-drawer-split" class="drawer-item">
+              <span class="drawer-item-icon">📅</span> Split
             </button>
             <button id="btn-drawer-csv" class="drawer-item">
               <span class="drawer-item-icon">📊</span> Export Data (CSV)
