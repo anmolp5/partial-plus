@@ -1035,6 +1035,7 @@ function startActiveWorkoutSession() {
         tag: ex.tag,
         target: ex.target,
         sets: ex.sets,
+        workoutNote: '',
         setData: data
       };
     })
@@ -1762,6 +1763,7 @@ function showCalendarDayDetails(dateStr) {
         exDiv.innerHTML = `
           <div class="history-exercise-title">${ex.name} <span class="tag-badge ${ex.tag.toLowerCase()}" style="font-size:8px; padding:1px 4px;">${ex.tag}</span></div>
           <div class="history-sets-summary">${setsStr}</div>
+          ${ex.workoutNote ? `<div class="history-ex-note" style="font-size:11.5px; color:var(--accent-lavender); margin-top:2px; font-style:italic; text-align: left; padding-left: 6px;">Note: ${ex.workoutNote}</div>` : ''}
         `;
         container.appendChild(exDiv);
       });
@@ -3003,6 +3005,7 @@ function setupNotesAndSubstitutionListeners() {
         tag: customDefaultTag,
         target: muscleTagsStr,
         sets: oldEx.sets,
+        workoutNote: '',
         setData: newData
       };
 
@@ -3216,6 +3219,7 @@ function createSubstitutionRow(cand, activeExName) {
       tag: selectedTag,
       target: cand.muscle_tags,
       sets: oldEx.sets,
+      workoutNote: '',
       setData: newData
     };
     
