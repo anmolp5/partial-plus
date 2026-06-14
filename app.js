@@ -3686,7 +3686,11 @@ function renderSplitDayExercises(day, listWrapper) {
       </div>
       <div style="display:flex; align-items:center; gap:10px;">
         <span class="tag-badge ${tagClass}" style="text-transform:uppercase;">${reg.default_tag}</span>
-        <button type="button" class="btn-edit-protocol" style="background:none; border:none; color:var(--text-muted); font-size:16px; cursor:pointer; padding:4px;">⚙️</button>
+        <button type="button" class="btn-edit-protocol" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:4px; display:inline-flex; align-items:center; justify-content:center;" title="Edit Protocol">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+          </svg>
+        </button>
         <button type="button" class="btn-delete-exercise" style="background:none; border:none; color:var(--accent-red); font-size:18px; cursor:pointer; padding:4px;">&times;</button>
       </div>
     `;
