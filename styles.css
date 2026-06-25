@@ -1666,7 +1666,7 @@ html:active-view-transition-type(backward)::view-transition-new(root) {
   flex-direction: column;
   height: 100dvh;
   box-sizing: border-box;
-  padding: 16px !important;
+  padding: calc(var(--safe-top) + 14px) 16px calc(var(--safe-bottom) + 16px) 16px !important;
   gap: 16px;
   background-color: #000000 !important;
   overflow: hidden;
