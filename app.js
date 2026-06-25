@@ -63,8 +63,27 @@ function initPWA() {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('Service Worker registered successfully.', reg.scope))
+        .then(reg => {
+          console.log('Service Worker registered successfully.', reg.scope);
+          // Check for updates
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'activated') {
+                window.location.reload();
+              }
+            });
+          });
+        })
         .catch(err => console.error('Service Worker registration failed.', err));
+    });
+    
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
     });
   }
 }
@@ -395,6 +414,19 @@ function showView(viewId, direction = 'forward') {
       activePanel.classList.add('active');
       activePanel.scrollTop = 0;
     }
+
+    // Toggle side drawer items based on active view
+    const drawerDashboard = document.getElementById('btn-drawer-dashboard');
+    const drawerAnalytics = document.getElementById('btn-drawer-analytics');
+    if (drawerDashboard && drawerAnalytics) {
+      if (viewId === 'analytics-view') {
+        drawerDashboard.style.display = 'flex';
+        drawerAnalytics.style.display = 'none';
+      } else {
+        drawerDashboard.style.display = 'none';
+        drawerAnalytics.style.display = 'flex';
+      }
+    }
   };
 
   // Check if browser supports View Transitions
@@ -464,6 +496,22 @@ function setupEventListeners() {
     document.getElementById('side-drawer').classList.add('active');
   });
 
+  const btnAnalyticsHamburger = document.getElementById('btn-analytics-hamburger');
+  if (btnAnalyticsHamburger) {
+    btnAnalyticsHamburger.addEventListener('click', () => {
+      document.getElementById('side-drawer').classList.add('active');
+    });
+  }
+
+  const btnDrawerDashboard = document.getElementById('btn-drawer-dashboard');
+  if (btnDrawerDashboard) {
+    btnDrawerDashboard.addEventListener('click', () => {
+      document.getElementById('side-drawer').classList.remove('active');
+      showView('dashboard-view', 'backward');
+      initDashboard();
+    });
+  }
+
   document.getElementById('btn-close-drawer').addEventListener('click', () => {
     document.getElementById('side-drawer').classList.remove('active');
   });
@@ -514,10 +562,7 @@ function setupEventListeners() {
     initDashboard();
   });
 
-  document.getElementById('btn-close-analytics').addEventListener('click', () => {
-    showView('dashboard-view', 'backward');
-    initDashboard();
-  });
+
 
   document.getElementById('btn-save-routine').addEventListener('click', () => {
     saveRoutineFromEditor();
@@ -4139,26 +4184,71 @@ function saveSplitChanges() {
 let analyticsState = {
   currentMetricType: null, // 'weight' | 'muscle' | 'exercise'
   selectedMetric: null,    // 'Weight' | 'Chest' | 'Legs' | 'Incline Dumbbell Press' etc.
-  currentRange: '3M'       // '1M' | '3M' | '6M' | 'All'
+  currentRange: '3M',      // '1M' | '3M' | '6M' | 'All'
+  excludeNotes: false      // Exclude logs with notes
 };
+
+const MUSCLE_GROUP_MAPPING = {
+  'legs': ['quads', 'hamstrings', 'glutes', 'calves', 'legs'],
+  'back': ['lats', 'mid-back', 'traps', 'rhomboids', 'back'],
+  'chest': ['chest'],
+  'shoulders': ['shoulders', 'rear delts', 'delts'],
+  'arms': ['biceps', 'triceps', 'arms']
+};
+
+function belongsToGroup(muscle, group) {
+  if (!muscle || !group) return false;
+  const m = muscle.toLowerCase();
+  const g = group.toLowerCase();
+  if (g === m) return true;
+  const mapped = MUSCLE_GROUP_MAPPING[g];
+  if (!mapped) return false;
+  return mapped.includes(m);
+}
 
 function openAnalyticsPanel() {
   // Reset navigation to State A selector main menu
   analyticsState.currentMetricType = null;
   analyticsState.selectedMetric = null;
   analyticsState.currentRange = '3M';
+  analyticsState.excludeNotes = false;
   
-  // Show/hide correct views
-  document.getElementById('analytics-selector').classList.remove('minimized');
-  document.getElementById('analytics-menu-main').style.display = 'flex';
-  document.getElementById('analytics-menu-muscles').style.display = 'none';
-  document.getElementById('analytics-menu-exercises').style.display = 'none';
-  document.getElementById('analytics-data-view').style.display = 'none';
+  const excludeNotesCheckbox = document.getElementById('analytics-exclude-notes');
+  if (excludeNotesCheckbox) {
+    excludeNotesCheckbox.checked = false;
+  }
+  
+  // Set dynamic layout state to Selection
+  const viewContainer = document.getElementById('analytics-view');
+  if (viewContainer) {
+    viewContainer.classList.remove('state-detail', 'state-selection-sub');
+    viewContainer.classList.add('state-selection-main');
+  }
+  
+  const titleEl = document.getElementById('analytics-title');
+  if (titleEl) {
+    titleEl.textContent = 'Analytics';
+  }
+  
+  const menuMain = document.getElementById('analytics-menu-main');
+  const menuMuscles = document.getElementById('analytics-menu-muscles');
+  const menuExercises = document.getElementById('analytics-menu-exercises');
+  if (menuMain && menuMuscles && menuExercises) {
+    menuMain.style.display = 'flex';
+    menuMain.style.opacity = '1';
+    menuMuscles.style.display = 'none';
+    menuMuscles.style.opacity = '0';
+    menuExercises.style.display = 'none';
+    menuExercises.style.opacity = '0';
+  }
   
   // Render selector event listeners if not already bound
   setupAnalyticsEventListeners();
   
   showView('analytics-view');
+  
+  // Populate bottom card with empty chart (after view is visible to measure size correctly)
+  renderAnalyticsChart([]);
 }
 
 // 1. e1RM Calculation Math
@@ -4175,7 +4265,7 @@ function calculateExerciseE1RM(weight, reps, rir, tag) {
   if (tag === 'Base') {
     multiplier = 1.15;
   } else if (tag === 'LLP') {
-    multiplier = 0.65;
+    multiplier = 1.0; // Treating LLP as 1.0x (same as HC)
   }
   
   return base * multiplier;
@@ -4197,9 +4287,22 @@ function getRangeStartDate(rangeKey) {
 }
 
 // 2. Data Filtering and Normalization Engine
+function getStartOfWeek(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(d.setDate(diff));
+  
+  const yyyy = monday.getFullYear();
+  const mm = String(monday.getMonth() + 1).padStart(2, '0');
+  const dd = String(monday.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+// 2. Data Filtering and Normalization Engine
 function processAnalyticsData() {
   const startDate = getRangeStartDate(analyticsState.currentRange);
-  const logs = []; // Array of { date: string, value: float }
+  const logs = []; // Array of { date: string, value: float, hasNote: boolean, workoutNote: string }
   
   // Filter history logs chronologically
   const sortedDates = Object.keys(state.history).sort();
@@ -4221,7 +4324,7 @@ function processAnalyticsData() {
           }
           // Relative to baseline (100%)
           const pct = (val / baselineWeight) * 100;
-          logs.push({ date: dateStr, value: pct, rawVal: val, unit: 'lbs' });
+          logs.push({ date: dateStr, value: pct, rawVal: val, unit: 'lbs', hasNote: false, workoutNote: '' });
         }
       }
     });
@@ -4238,6 +4341,10 @@ function processAnalyticsData() {
         const workout = state.history[dateStr];
         const ex = workout.exercises.find(e => e.name === targetEx);
         if (ex && ex.setData && ex.setData.length > 0) {
+          // If we exclude notes, skip this day completely if workoutNote exists
+          if (analyticsState.excludeNotes && ex.workoutNote && ex.workoutNote.trim()) {
+            return;
+          }
           // Average e1RM of all completed sets on this day
           let sumE1RM = 0;
           let count = 0;
@@ -4254,7 +4361,15 @@ function processAnalyticsData() {
               baselineE1RM = dailyAvg;
             }
             const pct = (dailyAvg / baselineE1RM) * 100;
-            logs.push({ date: dateStr, value: pct, rawVal: dailyAvg, unit: 'lbs' });
+            const hasNote = !!(ex.workoutNote && ex.workoutNote.trim());
+            logs.push({
+              date: dateStr,
+              value: pct,
+              rawVal: dailyAvg,
+              unit: 'lbs',
+              hasNote: hasNote,
+              workoutNote: hasNote ? ex.workoutNote.trim() : ''
+            });
           }
         }
       }
@@ -4274,6 +4389,9 @@ function processAnalyticsData() {
       if (d >= startDate) {
         const workout = state.history[dateStr];
         workout.exercises.forEach(ex => {
+          if (analyticsState.excludeNotes && ex.workoutNote && ex.workoutNote.trim()) {
+            return;
+          }
           if (!exerciseBaselines[ex.name]) {
             let sumE1RM = 0;
             let count = 0;
@@ -4296,8 +4414,14 @@ function processAnalyticsData() {
     const getGroupDailyUPI = (workout, targetGroup) => {
       let sumUPI = 0;
       let sumWeight = 0;
+      let hasNote = false;
+      const notesList = [];
       
       workout.exercises.forEach(ex => {
+        if (analyticsState.excludeNotes && ex.workoutNote && ex.workoutNote.trim()) {
+          return;
+        }
+        
         const baseline = exerciseBaselines[ex.name];
         if (!baseline) return;
         
@@ -4325,22 +4449,34 @@ function processAnalyticsData() {
             const secondary = muscles[1] || '';
             const tGroup = targetGroup.toLowerCase();
             
+            let matched = false;
             // Map primary (100% weight) and secondary (30% weight)
-            if (primary === tGroup || (tGroup === 'arms' && (primary === 'biceps' || primary === 'triceps'))) {
+            if (belongsToGroup(primary, tGroup)) {
               sumUPI += upi * 1.0;
               sumWeight += 1.0;
-            } else if (secondary === tGroup || (tGroup === 'arms' && (secondary === 'biceps' || secondary === 'triceps'))) {
+              matched = true;
+            } else if (belongsToGroup(secondary, tGroup)) {
               sumUPI += upi * 0.3;
               sumWeight += 0.3;
+              matched = true;
+            }
+            
+            if (matched && ex.workoutNote && ex.workoutNote.trim()) {
+              hasNote = true;
+              notesList.push(`${ex.name}: ${ex.workoutNote.trim()}`);
             }
           }
         }
       });
       
-      return sumWeight > 0 ? (sumUPI / sumWeight) : null;
+      return {
+        value: sumWeight > 0 ? (sumUPI / sumWeight) : null,
+        hasNote,
+        workoutNote: notesList.join(' | ')
+      };
     };
     
-    // Track last known values for Master Index carry forward
+    // Track last known values for carry forward
     const lastKnownGroups = {
       'legs': 100,
       'back': 100,
@@ -4349,66 +4485,195 @@ function processAnalyticsData() {
       'arms': 100
     };
     
-    sortedDates.forEach(dateStr => {
-      const d = new Date(dateStr + 'T00:00:00');
-      if (d >= startDate) {
-        const workout = state.history[dateStr];
+    if (targetMuscleGroup === 'Full Body') {
+      // Group workouts in the selected date range by week start date (Monday)
+      const workoutsByWeek = {}; // weekKey -> array of { date: string, workout: object }
+      
+      sortedDates.forEach(dateStr => {
+        const d = new Date(dateStr + 'T00:00:00');
+        if (d >= startDate) {
+          const weekKey = getStartOfWeek(dateStr);
+          if (!workoutsByWeek[weekKey]) {
+            workoutsByWeek[weekKey] = [];
+          }
+          workoutsByWeek[weekKey].push({ date: dateStr, workout: state.history[dateStr] });
+        }
+      });
+      
+      const weekKeys = Object.keys(workoutsByWeek).sort();
+      
+      weekKeys.forEach(weekKey => {
+        const dayNotesList = [];
+        let dayHasNote = false;
         
-        if (targetMuscleGroup === 'Full Body') {
-          // Master Index logic
-          let activeOnDay = false;
-          
-          // Calculate daily averages for the 5 groups
-          ['Legs', 'Back', 'Chest', 'Shoulders', 'Arms'].forEach(group => {
-            const val = getGroupDailyUPI(workout, group);
-            if (val !== null) {
-              lastKnownGroups[group.toLowerCase()] = val;
-              activeOnDay = true;
+        // Collate all exercises trained in this week
+        const weeklyExData = {}; // name -> { sum: 0, count: 0, notes: [] }
+        
+        workoutsByWeek[weekKey].forEach(({ date, workout }) => {
+          workout.exercises.forEach(ex => {
+            if (analyticsState.excludeNotes && ex.workoutNote && ex.workoutNote.trim()) {
+              return;
+            }
+            
+            if (!weeklyExData[ex.name]) {
+              weeklyExData[ex.name] = { sum: 0, count: 0, notes: [] };
+            }
+            
+            ex.setData.forEach(set => {
+              const e1rm = calculateExerciseE1RM(set.weight, set.reps, set.rir, ex.tag);
+              if (e1rm > 0) {
+                weeklyExData[ex.name].sum += e1rm;
+                weeklyExData[ex.name].count++;
+              }
+            });
+            
+            if (ex.workoutNote && ex.workoutNote.trim()) {
+              weeklyExData[ex.name].notes.push(ex.workoutNote.trim());
             }
           });
-          
-          if (activeOnDay) {
-            // Visual coefficients sum
-            const masterVal = 
-              lastKnownGroups['legs'] * 0.22 +
-              lastKnownGroups['back'] * 0.22 +
-              lastKnownGroups['chest'] * 0.22 +
-              lastKnownGroups['shoulders'] * 0.18 +
-              lastKnownGroups['arms'] * 0.16;
-            logs.push({ date: dateStr, value: masterVal, rawVal: masterVal, unit: '%' });
-          }
-        } else {
-          // Specific Muscle Group logic
-          const val = getGroupDailyUPI(workout, targetMuscleGroup);
-          if (val !== null) {
-            logs.push({ date: dateStr, value: val, rawVal: val, unit: '%' });
+        });
+        
+        // Calculate weekly UPI% for each exercise trained
+        const weeklyExUPI = {};
+        for (const name in weeklyExData) {
+          const data = weeklyExData[name];
+          const baseline = exerciseBaselines[name];
+          if (baseline && data.count > 0) {
+            const avgE1RM = data.sum / data.count;
+            weeklyExUPI[name] = (avgE1RM / baseline) * 100;
+            
+            if (data.notes.length > 0) {
+              dayHasNote = true;
+              data.notes.forEach(n => {
+                if (!dayNotesList.includes(`${name}: ${n}`)) {
+                  dayNotesList.push(`${name}: ${n}`);
+                }
+              });
+            }
           }
         }
-      }
-    });
+        
+        // Group the weekly exercise UPIs into muscle groups
+        const weeklyGroupUPI = {
+          'legs': { sum: 0, weight: 0 },
+          'back': { sum: 0, weight: 0 },
+          'chest': { sum: 0, weight: 0 },
+          'shoulders': { sum: 0, weight: 0 },
+          'arms': { sum: 0, weight: 0 }
+        };
+        
+        for (const name in weeklyExUPI) {
+          const upi = weeklyExUPI[name];
+          const rawTags = getExerciseTarget(name) || '';
+          const muscles = rawTags.split(/[,\/]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+          
+          if (muscles.length > 0) {
+            const primary = muscles[0];
+            const secondary = muscles[1] || '';
+            
+            ['legs', 'back', 'chest', 'shoulders', 'arms'].forEach(g => {
+              if (belongsToGroup(primary, g)) {
+                weeklyGroupUPI[g].sum += upi * 1.0;
+                weeklyGroupUPI[g].weight += 1.0;
+              } else if (belongsToGroup(secondary, g)) {
+                weeklyGroupUPI[g].sum += upi * 0.3;
+                weeklyGroupUPI[g].weight += 0.3;
+              }
+            });
+          }
+        }
+        
+        // Update carry-forward values
+        let activeInWeek = false;
+        ['legs', 'back', 'chest', 'shoulders', 'arms'].forEach(g => {
+          if (weeklyGroupUPI[g].weight > 0) {
+            lastKnownGroups[g] = weeklyGroupUPI[g].sum / weeklyGroupUPI[g].weight;
+            activeInWeek = true;
+          }
+        });
+        
+        if (activeInWeek) {
+          const masterVal = 
+            lastKnownGroups['legs'] * 0.22 +
+            lastKnownGroups['back'] * 0.22 +
+            lastKnownGroups['chest'] * 0.22 +
+            lastKnownGroups['shoulders'] * 0.18 +
+            lastKnownGroups['arms'] * 0.16;
+          
+          logs.push({
+            date: weekKey,
+            value: masterVal,
+            rawVal: masterVal,
+            unit: '%',
+            hasNote: dayHasNote,
+            workoutNote: dayNotesList.join(' | ')
+          });
+        }
+      });
+    } else {
+      // Specific Muscle Group logic (Daily)
+      sortedDates.forEach(dateStr => {
+        const d = new Date(dateStr + 'T00:00:00');
+        if (d >= startDate) {
+          const workout = state.history[dateStr];
+          const res = getGroupDailyUPI(workout, targetMuscleGroup);
+          if (res.value !== null) {
+            logs.push({
+              date: dateStr,
+              value: res.value,
+              rawVal: res.value,
+              unit: '%',
+              hasNote: res.hasNote,
+              workoutNote: res.workoutNote
+            });
+          }
+        }
+      });
+    }
   }
   
   return logs;
 }
 
 // 3. SVG Line Chart Rendering Engine
-function renderAnalyticsChart(data) {
+function renderAnalyticsChart(data, drawLine = true) {
   const svg = document.getElementById('analytics-svg-chart');
   const path = document.getElementById('analytics-svg-path');
+  const dottedPath = document.getElementById('analytics-svg-dotted-path');
   const gridline = document.getElementById('analytics-baseline-gridline');
   const dotsContainer = document.getElementById('analytics-svg-dots');
   const peakLabel = document.getElementById('analytics-chart-peak-label');
-  const baselineLabel = document.getElementById('analytics-chart-baseline-label');
+  const maskRect = document.getElementById('analytics-mask-rect');
   
   if (!svg || !path || !gridline || !dotsContainer) return;
   
   dotsContainer.innerHTML = '';
   
+  // Use measured final dimensions if available to prevent stretching
+  const width = analyticsState.finalWidth || svg.clientWidth || 350;
+  const height = analyticsState.finalHeight || svg.clientHeight || 200;
+  const marginY = 15;
+  const marginX = 15;
+  
   if (data.length === 0) {
     path.setAttribute('d', '');
-    path.classList.remove('draw-line-anim');
-    peakLabel.textContent = 'Peak UPI%: --';
-    baselineLabel.textContent = 'Baseline: --';
+    if (dottedPath) {
+      dottedPath.setAttribute('d', '');
+    }
+    if (peakLabel) peakLabel.textContent = 'Peak Performance: --';
+    
+    // Restore default percentage position (10% from the bottom)
+    gridline.setAttribute('x1', '0');
+    gridline.setAttribute('x2', '100%');
+    gridline.setAttribute('y1', '90%');
+    gridline.setAttribute('y2', '90%');
+    gridline.style.display = 'block';
+    
+    if (maskRect) {
+      maskRect.setAttribute('height', height.toString());
+      maskRect.style.transition = 'none';
+      maskRect.setAttribute('width', '0');
+    }
     return;
   }
   
@@ -4418,17 +4683,9 @@ function renderAnalyticsChart(data) {
   const maxVal = Math.max(...values, 100);
   
   const peakVal = Math.max(...values);
-  peakLabel.textContent = `Peak Performance: ${Math.round(peakVal)}%`;
-  baselineLabel.textContent = `Baseline: 100%`;
-  
-  // Add padding margins so graph lines don't hit edge boundaries
-  const marginY = 15;
-  const marginX = 15;
-  
-  // Get the absolute width/height of the SVG container
-  const rect = svg.getBoundingClientRect();
-  const width = rect.width || 350;
-  const height = rect.height || 200;
+  if (peakLabel) {
+    peakLabel.textContent = `Peak Performance: ${Math.round(peakVal)}%`;
+  }
   
   const drawHeight = height - (2 * marginY);
   const drawWidth = width - (2 * marginX);
@@ -4448,53 +4705,136 @@ function renderAnalyticsChart(data) {
   
   // Draw dotted 100% baseline gridline
   const baselineY = getY(100);
-  gridline.setAttribute('y1', baselineY);
-  gridline.setAttribute('y2', baselineY);
+  gridline.setAttribute('x1', '0');
+  gridline.setAttribute('x2', width.toString());
+  gridline.setAttribute('y1', baselineY.toString());
+  gridline.setAttribute('y2', baselineY.toString());
   gridline.style.display = 'block';
   
-  // Construct path string d
-  let dStr = '';
+  // 1. Draw solid line connecting all dots consecutively
+  let dStrSolid = '';
+  if (drawLine) {
+    data.forEach((d, idx) => {
+      const x = getX(idx);
+      const y = getY(d.value);
+      if (idx === 0) {
+        dStrSolid += `M ${x} ${y}`;
+      } else {
+        dStrSolid += ` L ${x} ${y}`;
+      }
+    });
+  }
+
+  // 2. Overlay a dotted line bridging only purple dots that are separated by gold dots (note logs)
+  const purpleIndices = [];
+  data.forEach((d, idx) => {
+    if (!d.hasNote) {
+      purpleIndices.push(idx);
+    }
+  });
+
+  let dStrDotted = '';
+  if (drawLine) {
+    for (let k = 0; k < purpleIndices.length - 1; k++) {
+      const i = purpleIndices[k];
+      const j = purpleIndices[k + 1];
+      if (j > i + 1) {
+        // There is a note gap (gold dot) between purple indices i and j
+        const x1 = getX(i);
+        const y1 = getY(data[i].value);
+        const x2 = getX(j);
+        const y2 = getY(data[j].value);
+        dStrDotted += ` M ${x1} ${y1} L ${x2} ${y2}`;
+      }
+    }
+  }
+  
+  // Draw dots
   data.forEach((d, idx) => {
     const x = getX(idx);
     const y = getY(d.value);
-    
-    if (idx === 0) {
-      dStr += `M ${x} ${y}`;
-    } else {
-      dStr += ` L ${x} ${y}`;
-    }
     
     // Draw dot
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     circle.setAttribute('cx', x);
     circle.setAttribute('cy', y);
     circle.setAttribute('r', '5');
-    circle.setAttribute('fill', 'var(--accent-lavender)');
+    circle.setAttribute('fill', d.hasNote ? 'var(--accent-gold)' : 'var(--accent-lavender)');
     circle.setAttribute('stroke', '#000');
     circle.setAttribute('stroke-width', '1.5');
     circle.style.cursor = 'pointer';
     
     // Attach click popup on dots
     circle.addEventListener('click', () => {
+      const dialog = document.getElementById('analytics-info-dialog');
+      const titleEl = document.getElementById('analytics-info-title');
+      const bodyEl = document.getElementById('analytics-info-body');
+      if (!dialog || !titleEl || !bodyEl) return;
+  
       const dateObj = new Date(d.date + 'T00:00:00');
-      const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      alert(`${formattedDate}\nPerformance: ${Math.round(d.value)}%\n(${Math.round(d.rawVal)}${d.unit})`);
+      let titleText = '';
+      if (analyticsState.currentMetricType === 'muscle' && analyticsState.selectedMetric === 'Full Body') {
+        const fmt = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        titleText = `Week of ${fmt}`;
+      } else {
+        titleText = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+  
+      titleEl.textContent = titleText;
+  
+      bodyEl.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Performance</span>
+            <span class="tag-badge llp" style="font-size:14px; font-weight:700; color:var(--accent-lavender); padding:4px 8px; border-radius:8px;">${Math.round(d.value)}%</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Measurement</span>
+            <span style="font-size:14px; font-weight:600; color:var(--text-primary);">${Math.round(d.rawVal)} ${d.unit}</span>
+          </div>
+          ${d.hasNote && d.workoutNote ? `
+          <div style="background:rgba(252, 163, 17, 0.08); border:1px solid rgba(252, 163, 17, 0.25); border-radius:12px; padding:10px 12px; margin-top:4px; text-align:left;">
+            <div style="font-size:11px; font-weight:700; color:var(--accent-gold); text-transform:uppercase; margin-bottom:4px; letter-spacing:0.5px;">Note</div>
+            <div style="font-size:12px; color:var(--text-secondary); line-height:1.4; font-style:italic;">${d.workoutNote}</div>
+          </div>
+          ` : ''}
+        </div>
+      `;
+  
+      dialog.showModal();
     });
     
     dotsContainer.appendChild(circle);
   });
   
-  path.setAttribute('d', dStr);
-  
-  // Trigger CSS keyframe draw line animation
-  path.classList.remove('draw-line-anim');
-  void path.offsetWidth; // Force reflow
-  path.classList.add('draw-line-anim');
-  
-  // set stroke-dasharray dynamically to match total path length
-  const pathLength = path.getTotalLength();
-  path.style.strokeDasharray = pathLength;
-  path.style.strokeDashoffset = pathLength;
+  if (drawLine) {
+    path.setAttribute('d', dStrSolid);
+    if (dottedPath) {
+      dottedPath.setAttribute('d', dStrDotted);
+    }
+    
+    if (maskRect) {
+      maskRect.setAttribute('height', height.toString());
+      // Reset width to 0 without transition
+      maskRect.style.transition = 'none';
+      maskRect.setAttribute('width', '0');
+      void maskRect.offsetWidth; // force reflow
+      
+      // Animate width to reveal both solid and dotted paths concurrently
+      maskRect.style.transition = 'width 1.5s cubic-bezier(0.22, 1, 0.36, 1)';
+      maskRect.setAttribute('width', width.toString());
+    }
+  } else {
+    path.setAttribute('d', '');
+    if (dottedPath) {
+      dottedPath.setAttribute('d', '');
+    }
+    if (maskRect) {
+      maskRect.setAttribute('height', height.toString());
+      maskRect.style.transition = 'none';
+      maskRect.setAttribute('width', '0');
+    }
+  }
 }
 
 // 4. Render logs list
@@ -4518,12 +4858,18 @@ function renderAnalyticsLogsList(data) {
     row.style.cssText = 'padding:12px; margin-bottom:6px; cursor:default;';
     
     const dateObj = new Date(log.date + 'T00:00:00');
-    const fmtDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    let fmtDate = '';
+    if (analyticsState.currentMetricType === 'muscle' && analyticsState.selectedMetric === 'Full Body') {
+      fmtDate = 'Week of ' + dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } else {
+      fmtDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    }
     
     row.innerHTML = `
       <div style="display:flex; flex-direction:column; gap:2px; text-align:left;">
         <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${fmtDate}</span>
         <span style="font-size:11px; color:var(--text-muted);">${Math.round(log.rawVal)} ${log.unit}</span>
+        ${log.hasNote && log.workoutNote ? `<div style="font-size:10.5px; color:var(--accent-gold); margin-top:2px; font-style:italic; line-height:1.2;">Note: ${log.workoutNote}</div>` : ''}
       </div>
       <span class="tag-badge llp" style="font-size:10px; font-weight:700; color:var(--accent-lavender);">${Math.round(log.value)}%</span>
     `;
@@ -4535,24 +4881,107 @@ function renderAnalyticsLogsList(data) {
 function loadAnalyticsDataView(metricType, metricVal) {
   analyticsState.currentMetricType = metricType;
   analyticsState.selectedMetric = metricVal;
+  analyticsState.currentRange = '1M'; // default default range
   
-  // Minimize header
-  document.getElementById('analytics-selector').classList.add('minimized');
+  const viewContainer = document.getElementById('analytics-view');
+  const svg = document.getElementById('analytics-svg-chart');
   
-  // Show Main View state B
-  document.getElementById('analytics-data-view').style.display = 'flex';
+  // Measure final detail view size of the SVG
+  let finalWidth = 350;
+  let finalHeight = 200;
   
-  // Set title
-  let displayTitle = metricVal;
-  if (metricType === 'weight') {
-    displayTitle = 'Body Weight';
-  } else if (metricVal === 'Full Body') {
-    displayTitle = 'Full Body (Master Index)';
+  if (viewContainer && svg) {
+    // Select transitioning layout-affecting elements
+    const selectorCard = document.getElementById('analytics-selector-card');
+    const chartCard = document.getElementById('analytics-chart-card');
+    const headerTitleBar = document.getElementById('analytics-header-title-bar');
+    
+    const transitioningEls = [viewContainer, selectorCard, chartCard, headerTitleBar].filter(Boolean);
+    const originalTransitions = transitioningEls.map(el => el.style.transition);
+    
+    // Temporarily disable transitions to force an instant layout snap
+    transitioningEls.forEach(el => el.style.transition = 'none');
+    
+    // Temporarily force state-detail class to calculate layout
+    const prevClasses = Array.from(viewContainer.classList);
+    
+    viewContainer.classList.remove('state-selection-main', 'state-selection-sub');
+    viewContainer.classList.add('state-detail');
+    
+    // Force layout engine computation
+    const rect = svg.getBoundingClientRect();
+    finalWidth = rect.width || 350;
+    finalHeight = rect.height || 200;
+    
+    // Restore previous state classes
+    viewContainer.classList.forEach(c => viewContainer.classList.remove(c));
+    prevClasses.forEach(c => viewContainer.classList.add(c));
+    
+    // Restore original transitions
+    transitioningEls.forEach((el, idx) => el.style.transition = originalTransitions[idx]);
   }
-  document.getElementById('analytics-data-title').textContent = displayTitle;
   
-  // Update Date Pill Slider thumb position to match range (1M default)
-  updateAnalyticsDateSlider('1M');
+  analyticsState.finalWidth = finalWidth;
+  analyticsState.finalHeight = finalHeight;
+  
+  // Apply morph and collapse classes immediately
+  if (analyticsState.clickedCard) {
+    analyticsState.clickedCard.classList.add('clicked-morph');
+    
+    const selectorCard = document.getElementById('analytics-selector-card');
+    if (selectorCard) {
+      const allCards = selectorCard.querySelectorAll('.analytics-card');
+      allCards.forEach(card => {
+        if (card !== analyticsState.clickedCard) {
+          card.classList.add('fade-collapse');
+        }
+      });
+      
+      const backButtons = selectorCard.querySelectorAll('.btn-analytics-back');
+      backButtons.forEach(btn => btn.classList.add('fade-collapse'));
+      
+      const searchInput = document.getElementById('analytics-exercise-search');
+      if (searchInput) searchInput.classList.add('fade-collapse');
+      
+      const listHeaders = selectorCard.querySelectorAll('#analytics-exercise-list > div:not(.analytics-card)');
+      listHeaders.forEach(hdr => hdr.classList.add('fade-collapse'));
+    }
+  }
+  
+  // Toggle layout from Selection to Detail State immediately
+  if (viewContainer) {
+    viewContainer.classList.remove('state-selection-main', 'state-selection-sub');
+    viewContainer.classList.add('state-detail');
+  }
+  
+  // Set date range slider container state and thumb to 1M immediately
+  const container = document.querySelector('.date-range-slider-container');
+  if (container) {
+    const thumb = document.getElementById('analytics-date-thumb');
+    if (thumb) thumb.style.transform = 'translateX(0%)';
+    const buttons = container.querySelectorAll('.date-pill-btn');
+    buttons.forEach(btn => {
+      const btnRange = btn.getAttribute('data-range');
+      if (btnRange === '1M') {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+        btn.style.color = '#708090';
+      }
+    });
+  }
+
+  // Process data and render all dots and logs list immediately (during transition)
+  const processedData = processAnalyticsData();
+  renderAnalyticsChart(processedData, false); // drawLine = false
+  renderAnalyticsLogsList(processedData);
+  
+  // Defer drawing the lines until transition animation finishes (900ms)
+  setTimeout(() => {
+    if (analyticsState.selectedMetric === metricVal && viewContainer && viewContainer.classList.contains('state-detail')) {
+      renderAnalyticsChart(processedData, true); // drawLine = true
+    }
+  }, 900);
 }
 
 function updateAnalyticsDateSlider(range) {
@@ -4588,6 +5017,27 @@ function updateAnalyticsDateSlider(range) {
   renderAnalyticsLogsList(processedData);
 }
 
+// Helper to switch sub-menus inside selector card with a quick fade transition
+function switchSubMenu(fromId, toId) {
+  const fromEl = document.getElementById(fromId);
+  const toEl = document.getElementById(toId);
+  if (!fromEl || !toEl) return;
+  
+  fromEl.style.transition = 'opacity 0.15s ease-in-out';
+  fromEl.style.opacity = '0';
+  
+  setTimeout(() => {
+    fromEl.style.display = 'none';
+    toEl.style.display = 'flex';
+    toEl.style.opacity = '0';
+    toEl.style.transition = 'opacity 0.15s ease-in-out';
+    
+    // Force reflow
+    void toEl.offsetWidth;
+    toEl.style.opacity = '1';
+  }, 150);
+}
+
 // 6. Navigation Event Listeners
 let analyticsEventsBound = false;
 function setupAnalyticsEventListeners() {
@@ -4601,14 +5051,23 @@ function setupAnalyticsEventListeners() {
       const action = card.getAttribute('data-action');
       
       if (action === 'weight') {
+        analyticsState.clickedCard = card;
         loadAnalyticsDataView('weight', 'Weight');
       } else if (action === 'muscles') {
-        document.getElementById('analytics-menu-main').style.display = 'none';
-        document.getElementById('analytics-menu-muscles').style.display = 'flex';
+        switchSubMenu('analytics-menu-main', 'analytics-menu-muscles');
+        const viewContainer = document.getElementById('analytics-view');
+        if (viewContainer) {
+          viewContainer.classList.remove('state-selection-main');
+          viewContainer.classList.add('state-selection-sub');
+        }
       } else if (action === 'exercises') {
-        document.getElementById('analytics-menu-main').style.display = 'none';
-        document.getElementById('analytics-menu-exercises').style.display = 'flex';
+        switchSubMenu('analytics-menu-main', 'analytics-menu-exercises');
         renderAnalyticsExercisesList('');
+        const viewContainer = document.getElementById('analytics-view');
+        if (viewContainer) {
+          viewContainer.classList.remove('state-selection-main');
+          viewContainer.classList.add('state-selection-sub');
+        }
       }
     });
   });
@@ -4616,15 +5075,23 @@ function setupAnalyticsEventListeners() {
   // Back from Muscle Groups to Main
   const muscleBack = document.querySelector('#analytics-menu-muscles .btn-analytics-back');
   muscleBack.addEventListener('click', () => {
-    document.getElementById('analytics-menu-muscles').style.display = 'none';
-    document.getElementById('analytics-menu-main').style.display = 'flex';
+    switchSubMenu('analytics-menu-muscles', 'analytics-menu-main');
+    const viewContainer = document.getElementById('analytics-view');
+    if (viewContainer) {
+      viewContainer.classList.remove('state-selection-sub');
+      viewContainer.classList.add('state-selection-main');
+    }
   });
   
   // Back from Exercises to Main
   const exerciseBack = document.querySelector('#analytics-menu-exercises .btn-analytics-back');
   exerciseBack.addEventListener('click', () => {
-    document.getElementById('analytics-menu-exercises').style.display = 'none';
-    document.getElementById('analytics-menu-main').style.display = 'flex';
+    switchSubMenu('analytics-menu-exercises', 'analytics-menu-main');
+    const viewContainer = document.getElementById('analytics-view');
+    if (viewContainer) {
+      viewContainer.classList.remove('state-selection-sub');
+      viewContainer.classList.add('state-selection-main');
+    }
   });
   
   // Muscle Group sub-selection click
@@ -4632,6 +5099,7 @@ function setupAnalyticsEventListeners() {
   muscleCards.forEach(card => {
     card.addEventListener('click', () => {
       const group = card.getAttribute('data-muscle');
+      analyticsState.clickedCard = card;
       loadAnalyticsDataView('muscle', group);
     });
   });
@@ -4644,16 +5112,67 @@ function setupAnalyticsEventListeners() {
   
   // Back from State B data view to State A selector
   document.getElementById('btn-back-to-selector').addEventListener('click', () => {
-    document.getElementById('analytics-data-view').style.display = 'none';
-    document.getElementById('analytics-selector').classList.remove('minimized');
+    const viewContainer = document.getElementById('analytics-view');
     
-    // Return to the sub-menu we came from
+    // Recalculate/empty the chart card
+    renderAnalyticsChart([]);
+    const logsList = document.getElementById('analytics-logs-list');
+    if (logsList) logsList.innerHTML = '';
+    
+    // Remove morph and collapse classes
+    document.querySelectorAll('.clicked-morph').forEach(el => el.classList.remove('clicked-morph'));
+    document.querySelectorAll('.fade-collapse').forEach(el => el.classList.remove('fade-collapse'));
+    analyticsState.clickedCard = null;
+    analyticsState.finalWidth = null;
+    analyticsState.finalHeight = null;
+    
+    const menuMain = document.getElementById('analytics-menu-main');
+    const menuMuscles = document.getElementById('analytics-menu-muscles');
+    const menuExercises = document.getElementById('analytics-menu-exercises');
+    
+    if (menuMain && menuMuscles && menuExercises) {
+      menuMain.style.display = 'none';
+      menuMain.style.opacity = '0';
+      menuMuscles.style.display = 'none';
+      menuMuscles.style.opacity = '0';
+      menuExercises.style.display = 'none';
+      menuExercises.style.opacity = '0';
+    }
+    
+    // Return to the sub-menu we came from and restore headers
     if (analyticsState.currentMetricType === 'weight') {
-      document.getElementById('analytics-menu-main').style.display = 'flex';
+      if (viewContainer) {
+        viewContainer.classList.remove('state-detail', 'state-selection-sub');
+        viewContainer.classList.add('state-selection-main');
+      }
+      if (menuMain) {
+        menuMain.style.display = 'flex';
+        void menuMain.offsetWidth;
+        menuMain.style.transition = 'opacity 0.2s ease-in-out';
+        menuMain.style.opacity = '1';
+      }
     } else if (analyticsState.currentMetricType === 'muscle') {
-      document.getElementById('analytics-menu-muscles').style.display = 'flex';
+      if (viewContainer) {
+        viewContainer.classList.remove('state-detail', 'state-selection-main');
+        viewContainer.classList.add('state-selection-sub');
+      }
+      if (menuMuscles) {
+        menuMuscles.style.display = 'flex';
+        void menuMuscles.offsetWidth;
+        menuMuscles.style.transition = 'opacity 0.2s ease-in-out';
+        menuMuscles.style.opacity = '1';
+      }
     } else if (analyticsState.currentMetricType === 'exercise') {
-      document.getElementById('analytics-menu-exercises').style.display = 'flex';
+      if (viewContainer) {
+        viewContainer.classList.remove('state-detail', 'state-selection-main');
+        viewContainer.classList.add('state-selection-sub');
+      }
+      if (menuExercises) {
+        menuExercises.style.display = 'flex';
+        void menuExercises.offsetWidth;
+        menuExercises.style.transition = 'opacity 0.2s ease-in-out';
+        menuExercises.style.opacity = '1';
+      }
     }
   });
   
@@ -4665,9 +5184,54 @@ function setupAnalyticsEventListeners() {
       updateAnalyticsDateSlider(range);
     });
   });
+
+  // Exclude Notes Checkbox listener
+  const excludeNotesCheckbox = document.getElementById('analytics-exclude-notes');
+  if (excludeNotesCheckbox) {
+    excludeNotesCheckbox.addEventListener('change', (e) => {
+      analyticsState.excludeNotes = e.target.checked;
+      const processedData = processAnalyticsData();
+      renderAnalyticsChart(processedData);
+      renderAnalyticsLogsList(processedData);
+    });
+  }
+
+  // Analytics Info Dialog Close listener
+  const closeInfoBtn = document.getElementById('btn-close-analytics-info');
+  const infoDialog = document.getElementById('analytics-info-dialog');
+  if (closeInfoBtn && infoDialog) {
+    closeInfoBtn.addEventListener('click', () => {
+      infoDialog.close();
+    });
+  }
 }
 
 // Render dynamic exercise selection list in selector
+function getExercisePrimaryMuscleGroup(name) {
+  const rawTags = getExerciseTarget(name) || '';
+  const muscles = rawTags.split(/[,\/]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (muscles.length === 0) return 'Other';
+  
+  const primary = muscles[0];
+  const groups = ['Legs', 'Back', 'Chest', 'Shoulders', 'Arms'];
+  for (const g of groups) {
+    if (belongsToGroup(primary, g)) {
+      return g;
+    }
+  }
+  
+  const secondary = muscles[1] || '';
+  if (secondary) {
+    for (const g of groups) {
+      if (belongsToGroup(secondary, g)) {
+        return g;
+      }
+    }
+  }
+  
+  return 'Other';
+}
+
 function renderAnalyticsExercisesList(searchTerm) {
   const container = document.getElementById('analytics-exercise-list');
   if (!container) return;
@@ -4692,7 +5256,16 @@ function renderAnalyticsExercisesList(searchTerm) {
   
   const sortedExercises = Array.from(uniqueExercises).sort();
   
-  let count = 0;
+  // Group by muscle group
+  const groups = {
+    'Legs': [],
+    'Back': [],
+    'Chest': [],
+    'Shoulders': [],
+    'Arms': [],
+    'Other': []
+  };
+  
   sortedExercises.forEach(name => {
     const reg = state.exerciseRegistry[name] || { muscle_tags: 'Other' };
     
@@ -4700,23 +5273,42 @@ function renderAnalyticsExercisesList(searchTerm) {
       return;
     }
     
-    const card = document.createElement('div');
-    card.className = 'analytics-card';
-    card.style.cssText = 'padding:12px; margin-bottom:6px; cursor:pointer;';
-    card.innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:2px; text-align:left;">
-        <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${name}</span>
-        <span style="font-size:11px; color:var(--text-muted);">${reg.muscle_tags}</span>
-      </div>
-      <span class="chevron">▶</span>
-    `;
+    const groupName = getExercisePrimaryMuscleGroup(name);
+    groups[groupName].push({ name, reg });
+  });
+  
+  let count = 0;
+  const order = ['Legs', 'Back', 'Chest', 'Shoulders', 'Arms', 'Other'];
+  order.forEach(groupName => {
+    const list = groups[groupName];
+    if (list.length === 0) return;
     
-    card.addEventListener('click', () => {
-      loadAnalyticsDataView('exercise', name);
+    // Header for muscle group section
+    const header = document.createElement('div');
+    header.style.cssText = 'font-size:11px; font-weight:700; color:var(--accent-lavender); text-transform:uppercase; letter-spacing:0.5px; margin-top:14px; margin-bottom:8px; text-align:left; padding-left:4px;';
+    header.textContent = groupName;
+    container.appendChild(header);
+    
+    list.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'analytics-card';
+      card.style.cssText = 'padding:12px; margin-bottom:6px; cursor:pointer;';
+      card.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:2px; text-align:left;">
+          <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${item.name}</span>
+          <span style="font-size:11px; color:var(--text-muted);">${item.reg.muscle_tags}</span>
+        </div>
+        <span class="chevron">▶</span>
+      `;
+      
+      card.addEventListener('click', () => {
+        analyticsState.clickedCard = card;
+        loadAnalyticsDataView('exercise', item.name);
+      });
+      
+      container.appendChild(card);
+      count++;
     });
-    
-    container.appendChild(card);
-    count++;
   });
   
   if (count === 0) {

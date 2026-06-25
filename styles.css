@@ -1591,20 +1591,311 @@ html:active-view-transition-type(backward)::view-transition-new(root) {
   color: var(--accent-lavender) !important;
 }
 
-/* SVG Line chart drawing animation */
-@keyframes drawLine {
-  from {
-    stroke-dashoffset: 1000;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
+#analytics-mask-rect {
+  transition: width 1.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-#analytics-svg-path.draw-line-anim {
-  stroke-dasharray: 1000;
-  stroke-dashoffset: 1000;
-  animation: drawLine 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+/* Custom Toggle Switch */
+.toggle-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  margin-bottom: 14px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.1);
+  transition: .3s cubic-bezier(0.25, 1, 0.5, 1);
+  border-radius: 24px;
+  border: 1px solid var(--border-glass);
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: var(--text-primary);
+  transition: .3s cubic-bezier(0.25, 1, 0.5, 1);
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent-gradient);
+  border-color: transparent;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+/* -------------------------------------------------------------
+ * Analytics Dynamic Layout & Transitions
+ * ------------------------------------------------------------- */
+#analytics-view {
+  display: none;
+  flex-direction: column;
+  height: 100dvh;
+  box-sizing: border-box;
+  padding: 16px !important;
+  gap: 16px;
+  background-color: #000000 !important;
+  overflow: hidden;
+  transition: gap 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#analytics-view.active {
+  display: flex !important;
+}
+
+#analytics-header-title-bar {
+  transition: all 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#analytics-selector-card, #analytics-chart-card {
+  transition: all 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transform: translateZ(0); /* Fix WebKit backdrop-filter rendering glitches */
+  backface-visibility: hidden;
+}
+
+/* state-selection-main:
+   Top card is 190px height (fits the 3 buttons).
+   Bottom card takes all remaining height. */
+#analytics-view.state-selection-main #analytics-selector-card {
+  flex: 0 0 210px;
+  height: 210px;
+}
+
+#analytics-view.state-selection-main #analytics-chart-card {
+  flex: 1 1 auto;
+}
+
+#analytics-view.state-selection-main #analytics-detail-controls {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+#analytics-view.state-selection-main #analytics-logs-container {
+  display: none !important;
+}
+
+/* state-selection-sub:
+   Top card takes 70% of screen height minus header spacing.
+   Bottom card takes 30% of screen height. */
+#analytics-view.state-selection-sub #analytics-selector-card {
+  flex: 0 0 calc(70% - 32px);
+  max-height: calc(70% - 32px);
+}
+
+#analytics-view.state-selection-sub #analytics-chart-card {
+  flex: 0 0 calc(30% - 32px);
+  max-height: calc(30% - 32px);
+}
+
+#analytics-view.state-selection-sub #analytics-detail-controls {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+#analytics-view.state-selection-sub #analytics-logs-container {
+  display: none !important;
+}
+
+/* state-detail:
+   Top main Analytics title bar collapses to height 0 and fades out.
+   Top card (selector card) collapses/morphs to 56px title box.
+   Bottom card (chart card) expands and sits flush against top card (0 gap).
+   Borders/corner radiuses at the intersection go to 0 to combine them into one unified card. */
+#analytics-view.state-detail {
+  gap: 0 !important;
+}
+
+#analytics-view.state-detail #analytics-header-title-bar {
+  opacity: 0 !important;
+  height: 0 !important;
+  margin-bottom: 0 !important;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+#analytics-view.state-detail #analytics-selector-card {
+  flex: 0 0 56px;
+  height: 56px;
+  padding: 12px 16px !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+#btn-back-to-selector {
+  width: 0;
+  opacity: 0;
+  margin: 0;
+  overflow: hidden;
+  pointer-events: none;
+  align-self: center;
+  transition: all 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#analytics-menu-container {
+  align-self: stretch;
+  height: 100%;
+}
+
+#analytics-view.state-detail #btn-back-to-selector {
+  width: 24px;
+  opacity: 1;
+  margin-right: 12px;
+  pointer-events: auto;
+}
+
+#analytics-menu-main,
+#analytics-menu-muscles,
+#analytics-menu-exercises,
+#analytics-exercise-list {
+  transition: gap 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#analytics-view.state-detail #analytics-menu-main,
+#analytics-view.state-detail #analytics-menu-muscles,
+#analytics-view.state-detail #analytics-menu-exercises,
+#analytics-view.state-detail #analytics-exercise-list {
+  gap: 0 !important;
+}
+
+#analytics-view.state-detail #analytics-chart-card {
+  flex: 1 1 calc(100% - 56px);
+  max-height: calc(100% - 56px);
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+  border-top: none !important;
+}
+
+#analytics-view.state-detail #analytics-detail-controls {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#analytics-view.state-detail #analytics-logs-container {
+  display: flex !important;
+}
+
+/* Morph transitions for selector cards */
+.analytics-card, .btn-analytics-back, #analytics-exercise-search {
+  transition: all 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.analytics-card.clicked-morph {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  cursor: default !important;
+}
+
+.analytics-card.clicked-morph span,
+.analytics-card.clicked-morph div span {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--text-primary) !important;
+  transition: font-size 0.9s cubic-bezier(0.22, 1, 0.36, 1), font-weight 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.analytics-card.clicked-morph div {
+  gap: 0 !important;
+  transition: gap 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.analytics-card.clicked-morph div span:nth-child(2) {
+  opacity: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  transition: all 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.analytics-card.clicked-morph .chevron {
+  opacity: 0 !important;
+  width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transition: all 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Collapse non-selected items */
+.fade-collapse {
+  opacity: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  border: none !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+  transition: all 0.9s cubic-bezier(0.22, 1, 0.36, 1) !important;
+}
+
+/* Custom transparent scrollbar styling for lists to prevent native browser flashes */
+#analytics-logs-list, #analytics-exercise-list {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(191, 155, 254, 0.3) transparent;
+}
+
+#analytics-logs-list::-webkit-scrollbar, #analytics-exercise-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+#analytics-logs-list::-webkit-scrollbar-track, #analytics-exercise-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#analytics-logs-list::-webkit-scrollbar-thumb, #analytics-exercise-list::-webkit-scrollbar-thumb {
+  background: rgba(191, 155, 254, 0.3);
+  border-radius: 10px;
+}
+
+/* Reset outline highlights on button focuses */
+.back-btn:focus, .hamburger-btn:focus, .btn-analytics-back:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 
 
