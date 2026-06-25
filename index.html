@@ -318,6 +318,118 @@
         </div>
       </section>
 
+      <!-- 6. ANALYTICS PERFORMANCE VIEW -->
+      <!-- ========================================================= -->
+      <section id="analytics-view" class="view-panel" style="height:100vh; overflow:hidden !important; padding-bottom:0 !important; display:none; flex-direction:column;">
+        <!-- STATE A: Navigation & Selectors -->
+        <header id="analytics-selector" style="display:flex; flex-direction:column; gap:16px; transition:all 0.4s cubic-bezier(0.4, 0, 0.2, 1); width:100%;">
+          <div class="config-header" id="analytics-header-title-bar">
+            <button id="btn-close-analytics" class="back-btn">◀</button>
+            <h1 style="margin-bottom:0;">Analytics</h1>
+          </div>
+          
+          <!-- Main Menu Container -->
+          <div id="analytics-menu-main" style="display:flex; flex-direction:column; gap:10px;">
+            <div class="analytics-card" data-action="weight">
+              <span>Body Weight</span>
+              <span class="chevron">▶</span>
+            </div>
+            <div class="analytics-card" data-action="muscles">
+              <span>Muscle Groups</span>
+              <span class="chevron">▶</span>
+            </div>
+            <div class="analytics-card" data-action="exercises">
+              <span>Exercises</span>
+              <span class="chevron">▶</span>
+            </div>
+          </div>
+          
+          <!-- Muscle Groups Sub-menu -->
+          <div id="analytics-menu-muscles" style="display:none; flex-direction:column; gap:10px;">
+            <button type="button" class="btn btn-secondary btn-analytics-back" style="width:100%; margin-bottom:6px; font-weight:700; text-align:left; padding-left:14px;">◀ Back</button>
+            <div class="analytics-card" data-muscle="Full Body">
+              <span>Full Body (Master Index)</span>
+              <span class="chevron">▶</span>
+            </div>
+            <div class="analytics-card" data-muscle="Legs">
+              <span>Legs</span>
+              <span class="chevron">▶</span>
+            </div>
+            <div class="analytics-card" data-muscle="Back">
+              <span>Back</span>
+              <span class="chevron">▶</span>
+            </div>
+            <div class="analytics-card" data-muscle="Chest">
+              <span>Chest</span>
+              <span class="chevron">▶</span>
+            </div>
+            <div class="analytics-card" data-muscle="Shoulders">
+              <span>Shoulders</span>
+              <span class="chevron">▶</span>
+            </div>
+            <div class="analytics-card" data-muscle="Arms">
+              <span>Arms</span>
+              <span class="chevron">▶</span>
+            </div>
+          </div>
+          
+          <!-- Exercises Sub-menu -->
+          <div id="analytics-menu-exercises" style="display:none; flex-direction:column; gap:10px;">
+            <button type="button" class="btn btn-secondary btn-analytics-back" style="width:100%; margin-bottom:6px; font-weight:700; text-align:left; padding-left:14px;">◀ Back</button>
+            <!-- Search bar -->
+            <input type="text" id="analytics-exercise-search" class="form-input" placeholder="Search exercises..." style="width:100%; margin:0 10px 10px 0; padding:10px; border-radius:10px; box-sizing:border-box;">
+            <!-- Scrollable list of exercises -->
+            <div id="analytics-exercise-list" style="display:flex; flex-direction:column; gap:8px; max-height:calc(100vh - 220px); overflow-y:auto; padding-right:2px; box-sizing:border-box;">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </header>
+
+        <!-- STATE B: Data Chart & Historical Logs -->
+        <main id="analytics-data-view" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <button id="btn-back-to-selector" class="back-btn" style="margin:0;">◀</button>
+              <h2 id="analytics-data-title" style="margin:0; font-size:18px; font-weight:700; color:var(--text-primary);">Muscle Groups</h2>
+            </div>
+          </div>
+
+          <!-- Date Range Picker Slider -->
+          <div class="date-range-slider-container" style="position:relative; display:flex; height:36px; background:rgba(0,0,0,0.2); border:1px solid var(--border-glass); border-radius:18px; overflow:hidden; padding:2px; width:100%; box-sizing:border-box; margin-bottom:14px;">
+            <div id="analytics-date-thumb" class="slider-thumb" style="position:absolute; top:2px; bottom:2px; left:2px; width:calc(25% - 2px); border-radius:16px; background:rgba(191, 155, 254, 0.15); border:1px solid rgba(191, 155, 254, 0.3); transition:transform 0.3s cubic-bezier(0.25,1,0.5,1); pointer-events:none; z-index:1;"></div>
+            <button type="button" class="date-pill-btn active" data-range="1M" style="flex:1; background:none; border:none; color:var(--accent-lavender); font-family:inherit; font-size:12px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">1M</button>
+            <button type="button" class="date-pill-btn" data-range="3M" style="flex:1; background:none; border:none; color:#708090; font-family:inherit; font-size:12px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">3M</button>
+            <button type="button" class="date-pill-btn" data-range="6M" style="flex:1; background:none; border:none; color:#708090; font-family:inherit; font-size:12px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">6M</button>
+            <button type="button" class="date-pill-btn" data-range="All" style="flex:1; background:none; border:none; color:#708090; font-family:inherit; font-size:12px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">All</button>
+          </div>
+
+          <!-- Chart Visual Wrapper -->
+          <div id="analytics-chart-wrapper" style="position:relative; width:100%; height:200px; background:rgba(255,255,255,0.02); border:1px solid var(--border-glass); border-radius:16px; overflow:hidden; margin-bottom:14px; box-sizing:border-box; flex-shrink:0;">
+            <!-- Top Peak label -->
+            <div id="analytics-chart-peak-label" style="position:absolute; top:8px; left:12px; font-size:11px; font-weight:700; color:var(--accent-lavender); text-transform:uppercase; letter-spacing:0.5px; z-index:5;">Peak UPI%: 100%</div>
+            
+            <!-- Bottom Baseline label -->
+            <div id="analytics-chart-baseline-label" style="position:absolute; bottom:8px; left:12px; font-size:11px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; z-index:5;">Baseline: 100%</div>
+            
+            <!-- SVG Element -->
+            <svg id="analytics-svg-chart" style="width:100%; height:100%; display:block;">
+              <!-- Baseline horizontal line -->
+              <line id="analytics-baseline-gridline" x1="0" y1="0" x2="100%" y2="0" stroke="rgba(255,255,255,0.08)" stroke-width="1.5" stroke-dasharray="4,4"></line>
+              <!-- SVG path for data line -->
+              <path id="analytics-svg-path" d="" stroke="#dcd0ff" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+              <!-- SVG circles for interactive data points -->
+              <g id="analytics-svg-dots"></g>
+            </svg>
+          </div>
+
+          <!-- Chronological logs listing -->
+          <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; text-align:left; padding-left:4px;">History Logs</div>
+          <div id="analytics-logs-list" style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; max-height:calc(100vh - 430px); padding-right:2px; box-sizing:border-box; padding-bottom:30px;">
+            <!-- Dynamically populated list of logs -->
+          </div>
+        </main>
+      </section>
+
       <!-- ========================================================= -->
       <!-- NATIVE OVERLAYS (DIALOG MODALS) -->
       <!-- ========================================================= -->
@@ -604,6 +716,16 @@
                   <line x1="3" y1="10" x2="21" y2="10"></line>
                 </svg>
               </span> Split
+            </button>
+            <button id="btn-drawer-analytics" class="drawer-item">
+              <span class="drawer-item-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="18" y1="20" x2="18" y2="10"></line>
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <line x1="6" y1="20" x2="6" y2="14"></line>
+                  <path d="M3 3v18h18"></path>
+                </svg>
+              </span> Analytics
             </button>
             <button id="btn-drawer-csv" class="drawer-item">
               <span class="drawer-item-icon">

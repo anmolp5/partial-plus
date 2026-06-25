@@ -484,6 +484,11 @@ function setupEventListeners() {
     openSplitPanel();
   });
 
+  document.getElementById('btn-drawer-analytics').addEventListener('click', () => {
+    document.getElementById('side-drawer').classList.remove('active');
+    openAnalyticsPanel();
+  });
+
   document.getElementById('btn-drawer-csv').addEventListener('click', () => {
     document.getElementById('side-drawer').classList.remove('active');
     downloadHistoryCSV();
@@ -505,6 +510,11 @@ function setupEventListeners() {
   });
 
   document.getElementById('btn-close-split').addEventListener('click', () => {
+    showView('dashboard-view', 'backward');
+    initDashboard();
+  });
+
+  document.getElementById('btn-close-analytics').addEventListener('click', () => {
     showView('dashboard-view', 'backward');
     initDashboard();
   });
@@ -4120,4 +4130,596 @@ function saveSplitChanges() {
   // 3. Return to dashboard and init
   showView('dashboard-view', 'backward');
   initDashboard();
+}
+
+// =============================================================
+// PWA ANALYTICS TAB ENGINE (UPI% & e1RM Visualizer)
+// =============================================================
+
+let analyticsState = {
+  currentMetricType: null, // 'weight' | 'muscle' | 'exercise'
+  selectedMetric: null,    // 'Weight' | 'Chest' | 'Legs' | 'Incline Dumbbell Press' etc.
+  currentRange: '3M'       // '1M' | '3M' | '6M' | 'All'
+};
+
+function openAnalyticsPanel() {
+  // Reset navigation to State A selector main menu
+  analyticsState.currentMetricType = null;
+  analyticsState.selectedMetric = null;
+  analyticsState.currentRange = '3M';
+  
+  // Show/hide correct views
+  document.getElementById('analytics-selector').classList.remove('minimized');
+  document.getElementById('analytics-menu-main').style.display = 'flex';
+  document.getElementById('analytics-menu-muscles').style.display = 'none';
+  document.getElementById('analytics-menu-exercises').style.display = 'none';
+  document.getElementById('analytics-data-view').style.display = 'none';
+  
+  // Render selector event listeners if not already bound
+  setupAnalyticsEventListeners();
+  
+  showView('analytics-view');
+}
+
+// 1. e1RM Calculation Math
+function calculateExerciseE1RM(weight, reps, rir, tag) {
+  const w = parseFloat(weight);
+  const r = parseInt(reps);
+  const rirVal = parseInt(rir);
+  
+  if (isNaN(w) || isNaN(r) || w <= 0 || r <= 0) return 0;
+  
+  const base = w * (1 + ((r + rirVal) / 30));
+  
+  let multiplier = 1.0;
+  if (tag === 'Base') {
+    multiplier = 1.15;
+  } else if (tag === 'LLP') {
+    multiplier = 0.65;
+  }
+  
+  return base * multiplier;
+}
+
+// Get range cut-off date helper
+function getRangeStartDate(rangeKey) {
+  const now = new Date();
+  if (rangeKey === '1M') {
+    now.setMonth(now.getMonth() - 1);
+  } else if (rangeKey === '3M') {
+    now.setMonth(now.getMonth() - 3);
+  } else if (rangeKey === '6M') {
+    now.setMonth(now.getMonth() - 6);
+  } else {
+    return new Date(0); // All time
+  }
+  return now;
+}
+
+// 2. Data Filtering and Normalization Engine
+function processAnalyticsData() {
+  const startDate = getRangeStartDate(analyticsState.currentRange);
+  const logs = []; // Array of { date: string, value: float }
+  
+  // Filter history logs chronologically
+  const sortedDates = Object.keys(state.history).sort();
+  
+  if (analyticsState.currentMetricType === 'weight') {
+    // ---------------------------------------------------------
+    // BODY WEIGHT TRACKER
+    // ---------------------------------------------------------
+    const weightDates = Object.keys(state.weightHistory).sort();
+    let baselineWeight = null;
+    
+    weightDates.forEach(dateStr => {
+      const d = new Date(dateStr + 'T00:00:00');
+      if (d >= startDate) {
+        const val = parseFloat(state.weightHistory[dateStr]);
+        if (val > 0) {
+          if (baselineWeight === null) {
+            baselineWeight = val;
+          }
+          // Relative to baseline (100%)
+          const pct = (val / baselineWeight) * 100;
+          logs.push({ date: dateStr, value: pct, rawVal: val, unit: 'lbs' });
+        }
+      }
+    });
+  } else if (analyticsState.currentMetricType === 'exercise') {
+    // ---------------------------------------------------------
+    // EXERCISE e1RM TRACKER
+    // ---------------------------------------------------------
+    const targetEx = analyticsState.selectedMetric;
+    let baselineE1RM = null;
+    
+    sortedDates.forEach(dateStr => {
+      const d = new Date(dateStr + 'T00:00:00');
+      if (d >= startDate) {
+        const workout = state.history[dateStr];
+        const ex = workout.exercises.find(e => e.name === targetEx);
+        if (ex && ex.setData && ex.setData.length > 0) {
+          // Average e1RM of all completed sets on this day
+          let sumE1RM = 0;
+          let count = 0;
+          ex.setData.forEach(set => {
+            const e1rm = calculateExerciseE1RM(set.weight, set.reps, set.rir, ex.tag);
+            if (e1rm > 0) {
+              sumE1RM += e1rm;
+              count++;
+            }
+          });
+          if (count > 0) {
+            const dailyAvg = sumE1RM / count;
+            if (baselineE1RM === null) {
+              baselineE1RM = dailyAvg;
+            }
+            const pct = (dailyAvg / baselineE1RM) * 100;
+            logs.push({ date: dateStr, value: pct, rawVal: dailyAvg, unit: 'lbs' });
+          }
+        }
+      }
+    });
+  } else if (analyticsState.currentMetricType === 'muscle') {
+    // ---------------------------------------------------------
+    // MUSCLE GROUPS & MASTER INDEX
+    // ---------------------------------------------------------
+    const targetMuscleGroup = analyticsState.selectedMetric;
+    
+    // Find all baseline e1RMs for all exercises in the selected date range
+    const exerciseBaselines = {}; // exerciseName -> baselineE1RM
+    
+    // Pass 1: Find baseline e1RM for each exercise in this range
+    sortedDates.forEach(dateStr => {
+      const d = new Date(dateStr + 'T00:00:00');
+      if (d >= startDate) {
+        const workout = state.history[dateStr];
+        workout.exercises.forEach(ex => {
+          if (!exerciseBaselines[ex.name]) {
+            let sumE1RM = 0;
+            let count = 0;
+            ex.setData.forEach(set => {
+              const e1rm = calculateExerciseE1RM(set.weight, set.reps, set.rir, ex.tag);
+              if (e1rm > 0) {
+                sumE1RM += e1rm;
+                count++;
+              }
+            });
+            if (count > 0) {
+              exerciseBaselines[ex.name] = sumE1RM / count;
+            }
+          }
+        });
+      }
+    });
+    
+    // Helper to calculate daily average UPI% for a specific group
+    const getGroupDailyUPI = (workout, targetGroup) => {
+      let sumUPI = 0;
+      let sumWeight = 0;
+      
+      workout.exercises.forEach(ex => {
+        const baseline = exerciseBaselines[ex.name];
+        if (!baseline) return;
+        
+        // Calculate daily average e1RM
+        let sumE1RM = 0;
+        let count = 0;
+        ex.setData.forEach(set => {
+          const e1rm = calculateExerciseE1RM(set.weight, set.reps, set.rir, ex.tag);
+          if (e1rm > 0) {
+            sumE1RM += e1rm;
+            count++;
+          }
+        });
+        
+        if (count > 0) {
+          const dailyAvg = sumE1RM / count;
+          const upi = (dailyAvg / baseline) * 100;
+          
+          // Parse muscle tags
+          const rawTags = ex.target || getExerciseTarget(ex.name) || '';
+          const muscles = rawTags.split(/[,\/]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+          
+          if (muscles.length > 0) {
+            const primary = muscles[0];
+            const secondary = muscles[1] || '';
+            const tGroup = targetGroup.toLowerCase();
+            
+            // Map primary (100% weight) and secondary (30% weight)
+            if (primary === tGroup || (tGroup === 'arms' && (primary === 'biceps' || primary === 'triceps'))) {
+              sumUPI += upi * 1.0;
+              sumWeight += 1.0;
+            } else if (secondary === tGroup || (tGroup === 'arms' && (secondary === 'biceps' || secondary === 'triceps'))) {
+              sumUPI += upi * 0.3;
+              sumWeight += 0.3;
+            }
+          }
+        }
+      });
+      
+      return sumWeight > 0 ? (sumUPI / sumWeight) : null;
+    };
+    
+    // Track last known values for Master Index carry forward
+    const lastKnownGroups = {
+      'legs': 100,
+      'back': 100,
+      'chest': 100,
+      'shoulders': 100,
+      'arms': 100
+    };
+    
+    sortedDates.forEach(dateStr => {
+      const d = new Date(dateStr + 'T00:00:00');
+      if (d >= startDate) {
+        const workout = state.history[dateStr];
+        
+        if (targetMuscleGroup === 'Full Body') {
+          // Master Index logic
+          let activeOnDay = false;
+          
+          // Calculate daily averages for the 5 groups
+          ['Legs', 'Back', 'Chest', 'Shoulders', 'Arms'].forEach(group => {
+            const val = getGroupDailyUPI(workout, group);
+            if (val !== null) {
+              lastKnownGroups[group.toLowerCase()] = val;
+              activeOnDay = true;
+            }
+          });
+          
+          if (activeOnDay) {
+            // Visual coefficients sum
+            const masterVal = 
+              lastKnownGroups['legs'] * 0.22 +
+              lastKnownGroups['back'] * 0.22 +
+              lastKnownGroups['chest'] * 0.22 +
+              lastKnownGroups['shoulders'] * 0.18 +
+              lastKnownGroups['arms'] * 0.16;
+            logs.push({ date: dateStr, value: masterVal, rawVal: masterVal, unit: '%' });
+          }
+        } else {
+          // Specific Muscle Group logic
+          const val = getGroupDailyUPI(workout, targetMuscleGroup);
+          if (val !== null) {
+            logs.push({ date: dateStr, value: val, rawVal: val, unit: '%' });
+          }
+        }
+      }
+    });
+  }
+  
+  return logs;
+}
+
+// 3. SVG Line Chart Rendering Engine
+function renderAnalyticsChart(data) {
+  const svg = document.getElementById('analytics-svg-chart');
+  const path = document.getElementById('analytics-svg-path');
+  const gridline = document.getElementById('analytics-baseline-gridline');
+  const dotsContainer = document.getElementById('analytics-svg-dots');
+  const peakLabel = document.getElementById('analytics-chart-peak-label');
+  const baselineLabel = document.getElementById('analytics-chart-baseline-label');
+  
+  if (!svg || !path || !gridline || !dotsContainer) return;
+  
+  dotsContainer.innerHTML = '';
+  
+  if (data.length === 0) {
+    path.setAttribute('d', '');
+    path.classList.remove('draw-line-anim');
+    peakLabel.textContent = 'Peak UPI%: --';
+    baselineLabel.textContent = 'Baseline: --';
+    return;
+  }
+  
+  // Find min/max boundaries
+  const values = data.map(d => d.value);
+  const minVal = Math.min(...values, 100); // lock baseline 100% inside graph
+  const maxVal = Math.max(...values, 100);
+  
+  const peakVal = Math.max(...values);
+  peakLabel.textContent = `Peak Performance: ${Math.round(peakVal)}%`;
+  baselineLabel.textContent = `Baseline: 100%`;
+  
+  // Add padding margins so graph lines don't hit edge boundaries
+  const marginY = 15;
+  const marginX = 15;
+  
+  // Get the absolute width/height of the SVG container
+  const rect = svg.getBoundingClientRect();
+  const width = rect.width || 350;
+  const height = rect.height || 200;
+  
+  const drawHeight = height - (2 * marginY);
+  const drawWidth = width - (2 * marginX);
+  
+  const valRange = maxVal - minVal || 1;
+  
+  // Invert Y coordinates since SVG 0 is top
+  const getX = (index) => {
+    if (data.length <= 1) return width / 2;
+    return marginX + (index * (drawWidth / (data.length - 1)));
+  };
+  
+  const getY = (val) => {
+    // 0 is maxVal (top), drawHeight is minVal (bottom)
+    return marginY + drawHeight - ((val - minVal) / valRange * drawHeight);
+  };
+  
+  // Draw dotted 100% baseline gridline
+  const baselineY = getY(100);
+  gridline.setAttribute('y1', baselineY);
+  gridline.setAttribute('y2', baselineY);
+  gridline.style.display = 'block';
+  
+  // Construct path string d
+  let dStr = '';
+  data.forEach((d, idx) => {
+    const x = getX(idx);
+    const y = getY(d.value);
+    
+    if (idx === 0) {
+      dStr += `M ${x} ${y}`;
+    } else {
+      dStr += ` L ${x} ${y}`;
+    }
+    
+    // Draw dot
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', x);
+    circle.setAttribute('cy', y);
+    circle.setAttribute('r', '5');
+    circle.setAttribute('fill', 'var(--accent-lavender)');
+    circle.setAttribute('stroke', '#000');
+    circle.setAttribute('stroke-width', '1.5');
+    circle.style.cursor = 'pointer';
+    
+    // Attach click popup on dots
+    circle.addEventListener('click', () => {
+      const dateObj = new Date(d.date + 'T00:00:00');
+      const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      alert(`${formattedDate}\nPerformance: ${Math.round(d.value)}%\n(${Math.round(d.rawVal)}${d.unit})`);
+    });
+    
+    dotsContainer.appendChild(circle);
+  });
+  
+  path.setAttribute('d', dStr);
+  
+  // Trigger CSS keyframe draw line animation
+  path.classList.remove('draw-line-anim');
+  void path.offsetWidth; // Force reflow
+  path.classList.add('draw-line-anim');
+  
+  // set stroke-dasharray dynamically to match total path length
+  const pathLength = path.getTotalLength();
+  path.style.strokeDasharray = pathLength;
+  path.style.strokeDashoffset = pathLength;
+}
+
+// 4. Render logs list
+function renderAnalyticsLogsList(data) {
+  const container = document.getElementById('analytics-logs-list');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  
+  if (data.length === 0) {
+    container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">No logs found for this date range.</div>`;
+    return;
+  }
+  
+  // List chronologically descending (newest first)
+  const reversed = [...data].reverse();
+  
+  reversed.forEach(log => {
+    const row = document.createElement('div');
+    row.className = 'analytics-card';
+    row.style.cssText = 'padding:12px; margin-bottom:6px; cursor:default;';
+    
+    const dateObj = new Date(log.date + 'T00:00:00');
+    const fmtDate = dateObj.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    
+    row.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:2px; text-align:left;">
+        <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${fmtDate}</span>
+        <span style="font-size:11px; color:var(--text-muted);">${Math.round(log.rawVal)} ${log.unit}</span>
+      </div>
+      <span class="tag-badge llp" style="font-size:10px; font-weight:700; color:var(--accent-lavender);">${Math.round(log.value)}%</span>
+    `;
+    container.appendChild(row);
+  });
+}
+
+// 5. State B: Transition and Data Loading
+function loadAnalyticsDataView(metricType, metricVal) {
+  analyticsState.currentMetricType = metricType;
+  analyticsState.selectedMetric = metricVal;
+  
+  // Minimize header
+  document.getElementById('analytics-selector').classList.add('minimized');
+  
+  // Show Main View state B
+  document.getElementById('analytics-data-view').style.display = 'flex';
+  
+  // Set title
+  let displayTitle = metricVal;
+  if (metricType === 'weight') {
+    displayTitle = 'Body Weight';
+  } else if (metricVal === 'Full Body') {
+    displayTitle = 'Full Body (Master Index)';
+  }
+  document.getElementById('analytics-data-title').textContent = displayTitle;
+  
+  // Update Date Pill Slider thumb position to match range (1M default)
+  updateAnalyticsDateSlider('1M');
+}
+
+function updateAnalyticsDateSlider(range) {
+  analyticsState.currentRange = range;
+  
+  const container = document.querySelector('.date-range-slider-container');
+  const thumb = document.getElementById('analytics-date-thumb');
+  const buttons = container.querySelectorAll('.date-pill-btn');
+  
+  let translateX = '0%';
+  if (range === '1M') translateX = '0%';
+  else if (range === '3M') translateX = '100%';
+  else if (range === '6M') translateX = '200%';
+  else if (range === 'All') translateX = '300%';
+  
+  if (thumb) {
+    thumb.style.transform = `translateX(${translateX})`;
+  }
+  
+  buttons.forEach(btn => {
+    const btnRange = btn.getAttribute('data-range');
+    if (btnRange === range) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+      btn.style.color = '#708090'; // default Gray color
+    }
+  });
+  
+  // Process and render
+  const processedData = processAnalyticsData();
+  renderAnalyticsChart(processedData);
+  renderAnalyticsLogsList(processedData);
+}
+
+// 6. Navigation Event Listeners
+let analyticsEventsBound = false;
+function setupAnalyticsEventListeners() {
+  if (analyticsEventsBound) return;
+  analyticsEventsBound = true;
+  
+  // Main Menu clicks
+  const mainCards = document.querySelectorAll('#analytics-menu-main .analytics-card');
+  mainCards.forEach(card => {
+    card.addEventListener('click', () => {
+      const action = card.getAttribute('data-action');
+      
+      if (action === 'weight') {
+        loadAnalyticsDataView('weight', 'Weight');
+      } else if (action === 'muscles') {
+        document.getElementById('analytics-menu-main').style.display = 'none';
+        document.getElementById('analytics-menu-muscles').style.display = 'flex';
+      } else if (action === 'exercises') {
+        document.getElementById('analytics-menu-main').style.display = 'none';
+        document.getElementById('analytics-menu-exercises').style.display = 'flex';
+        renderAnalyticsExercisesList('');
+      }
+    });
+  });
+  
+  // Back from Muscle Groups to Main
+  const muscleBack = document.querySelector('#analytics-menu-muscles .btn-analytics-back');
+  muscleBack.addEventListener('click', () => {
+    document.getElementById('analytics-menu-muscles').style.display = 'none';
+    document.getElementById('analytics-menu-main').style.display = 'flex';
+  });
+  
+  // Back from Exercises to Main
+  const exerciseBack = document.querySelector('#analytics-menu-exercises .btn-analytics-back');
+  exerciseBack.addEventListener('click', () => {
+    document.getElementById('analytics-menu-exercises').style.display = 'none';
+    document.getElementById('analytics-menu-main').style.display = 'flex';
+  });
+  
+  // Muscle Group sub-selection click
+  const muscleCards = document.querySelectorAll('#analytics-menu-muscles .analytics-card');
+  muscleCards.forEach(card => {
+    card.addEventListener('click', () => {
+      const group = card.getAttribute('data-muscle');
+      loadAnalyticsDataView('muscle', group);
+    });
+  });
+  
+  // Exercise search input filter
+  const searchInput = document.getElementById('analytics-exercise-search');
+  searchInput.addEventListener('input', () => {
+    renderAnalyticsExercisesList(searchInput.value);
+  });
+  
+  // Back from State B data view to State A selector
+  document.getElementById('btn-back-to-selector').addEventListener('click', () => {
+    document.getElementById('analytics-data-view').style.display = 'none';
+    document.getElementById('analytics-selector').classList.remove('minimized');
+    
+    // Return to the sub-menu we came from
+    if (analyticsState.currentMetricType === 'weight') {
+      document.getElementById('analytics-menu-main').style.display = 'flex';
+    } else if (analyticsState.currentMetricType === 'muscle') {
+      document.getElementById('analytics-menu-muscles').style.display = 'flex';
+    } else if (analyticsState.currentMetricType === 'exercise') {
+      document.getElementById('analytics-menu-exercises').style.display = 'flex';
+    }
+  });
+  
+  // Date Pill Buttons listeners
+  const dateButtons = document.querySelectorAll('.date-pill-btn');
+  dateButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const range = btn.getAttribute('data-range');
+      updateAnalyticsDateSlider(range);
+    });
+  });
+}
+
+// Render dynamic exercise selection list in selector
+function renderAnalyticsExercisesList(searchTerm) {
+  const container = document.getElementById('analytics-exercise-list');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  const term = searchTerm.trim().toLowerCase();
+  
+  // Gather all unique exercises that exist in history logs or registry
+  const uniqueExercises = new Set();
+  
+  // From History
+  for (const date in state.history) {
+    state.history[date].exercises.forEach(ex => {
+      uniqueExercises.add(ex.name);
+    });
+  }
+  
+  // From Registry
+  for (const name in state.exerciseRegistry) {
+    uniqueExercises.add(name);
+  }
+  
+  const sortedExercises = Array.from(uniqueExercises).sort();
+  
+  let count = 0;
+  sortedExercises.forEach(name => {
+    const reg = state.exerciseRegistry[name] || { muscle_tags: 'Other' };
+    
+    if (term && !name.toLowerCase().includes(term) && !reg.muscle_tags.toLowerCase().includes(term)) {
+      return;
+    }
+    
+    const card = document.createElement('div');
+    card.className = 'analytics-card';
+    card.style.cssText = 'padding:12px; margin-bottom:6px; cursor:pointer;';
+    card.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:2px; text-align:left;">
+        <span style="font-size:13px; font-weight:600; color:var(--text-primary);">${name}</span>
+        <span style="font-size:11px; color:var(--text-muted);">${reg.muscle_tags}</span>
+      </div>
+      <span class="chevron">▶</span>
+    `;
+    
+    card.addEventListener('click', () => {
+      loadAnalyticsDataView('exercise', name);
+    });
+    
+    container.appendChild(card);
+    count++;
+  });
+  
+  if (count === 0) {
+    container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">No matching exercises found.</div>`;
+  }
 }

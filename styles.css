@@ -1517,3 +1517,94 @@ html:active-view-transition-type(backward)::view-transition-new(root) {
   transform: scale(1.15);
 }
 
+/* Analytics Tab CSS Layouts & Transitions */
+#analytics-view {
+  background-color: #000000 !important;
+}
+
+#analytics-selector {
+  flex-grow: 1;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#analytics-selector.minimized {
+  flex-grow: 0;
+  gap: 8px !important;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-glass);
+}
+
+#analytics-selector.minimized #analytics-menu-main,
+#analytics-selector.minimized #analytics-menu-muscles,
+#analytics-selector.minimized #analytics-menu-exercises {
+  display: none !important;
+}
+
+#analytics-selector.minimized #analytics-header-title-bar h1 {
+  font-size: 20px;
+}
+
+.analytics-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  margin-bottom: 6px;
+  box-sizing: border-box;
+}
+
+.analytics-card:active {
+  background: rgba(191, 155, 254, 0.08) !important;
+  border-color: var(--accent-lavender) !important;
+  transform: scale(0.98);
+}
+
+.analytics-card span {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.analytics-card .chevron {
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+
+.analytics-card:hover .chevron {
+  transform: translateX(3px);
+  color: var(--accent-lavender);
+}
+
+/* Date Range Picker Slider active states */
+.date-pill-btn {
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+
+.date-pill-btn.active {
+  color: var(--accent-lavender) !important;
+}
+
+/* SVG Line chart drawing animation */
+@keyframes drawLine {
+  from {
+    stroke-dashoffset: 1000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+#analytics-svg-path.draw-line-anim {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: drawLine 1.5s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+
