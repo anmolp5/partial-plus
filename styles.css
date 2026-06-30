@@ -1897,5 +1897,48 @@ html:active-view-transition-type(backward)::view-transition-new(root) {
   box-shadow: none !important;
 }
 
+/* Custom Day Selector Capsule Pills */
+.swap-capsule-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  border-radius: 50px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  border: 1px solid var(--border-glass);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Active target days: Glow in lavender-purple */
+.swap-capsule-pill.active {
+  background: rgba(220, 208, 255, 0.12); /* signature lavender-purple translucent background */
+  border-color: #dcd0ff; /* glow in signature lavender-purple */
+  color: #dcd0ff;
+  box-shadow: 0 0 12px rgba(220, 208, 255, 0.3); /* subtle glow */
+}
+
+/* Secondary alternatives and rest slots: desaturated deep Slate Gray */
+.swap-capsule-pill.inactive {
+  background: rgba(112, 128, 144, 0.08); /* deep Slate Gray translucent */
+  border-color: rgba(112, 128, 144, 0.25);
+  color: #708090; /* uniform deep Slate Gray */
+}
+
+.swap-capsule-pill.inactive:active {
+  background: rgba(112, 128, 144, 0.16);
+  border-color: rgba(112, 128, 144, 0.4);
+}
+
+.swap-capsule-pill.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 
 

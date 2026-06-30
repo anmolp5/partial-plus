@@ -39,6 +39,8 @@ const KEYS = {
 
 // Current Calendar Month display state
 let currentCalDate = new Date();
+let selectedSwapTargetDay = '';
+let activeSplitSelectDay = '';
 
 // Stopwatch & Lap Timer State
 let stopwatchInterval = null;
@@ -467,7 +469,7 @@ function updateProfileTag() {
 // 1. Auth & Login Modules
 // -------------------------------------------------------------
 function setupEventListeners() {
-  // Login Panel
+  try {
   document.getElementById('btn-user-login-prompt').addEventListener('click', () => {
     document.querySelector('.login-choices').style.display = 'none';
     document.getElementById('auth-form').classList.add('active');
@@ -620,17 +622,24 @@ function setupEventListeners() {
     startActiveWorkoutSession();
   });
 
-  // Swap Dropdown visibility controller
-  document.getElementById('swap-select').addEventListener('change', (e) => {
-    const todayStr = getLocalDateString();
-    const currentTemplate = getAssignedTemplateDay(todayStr);
-    const swapBtn = document.getElementById('btn-swap-workout');
-    if (e.target.value !== currentTemplate) {
-      swapBtn.style.display = 'block';
-    } else {
-      swapBtn.style.display = 'none';
-    }
-  });
+  // Custom Swap Menu Trigger and Modal Controllers
+  const swapTrigger = document.getElementById('swap-select-trigger');
+  if (swapTrigger) {
+    swapTrigger.addEventListener('click', () => {
+      const modal = document.getElementById('swap-custom-menu-modal');
+      if (modal) modal.showModal();
+    });
+  }
+
+  const btnCloseSwapModal = document.getElementById('btn-close-swap-menu-modal');
+  if (btnCloseSwapModal) {
+    btnCloseSwapModal.addEventListener('click', () => {
+      document.getElementById('swap-custom-menu-modal').close();
+    });
+  }
+
+  const swapModal = document.getElementById('swap-custom-menu-modal');
+  if (swapModal) enableLightDismiss(swapModal);
 
   // Swap Button Action
   document.getElementById('btn-swap-workout').addEventListener('click', () => {
@@ -718,6 +727,40 @@ function setupEventListeners() {
   });
 
   setupNotesAndSubstitutionListeners();
+  setupWorkoutAddExerciseListeners();
+  // Create Custom Day click handler (inline card creator)
+  const btnCreateCustom = document.getElementById('btn-create-custom-day');
+  if (btnCreateCustom) {
+    btnCreateCustom.addEventListener('click', () => {
+      if (!splitDraft) return;
+      const newKey = `_custom_${Date.now()}`;
+      splitDraft[newKey] = {
+        label: 'New Custom Day',
+        isRest: false,
+        exercises: []
+      };
+      renderSplitEditor();
+      
+      // Auto-scroll to the bottom of the container
+      setTimeout(() => {
+        const wrapper = document.getElementById('split-days-container');
+        if (wrapper) {
+          wrapper.scrollTop = wrapper.scrollHeight;
+        }
+      }, 50);
+    });
+  }
+
+  // Split Workout Selector Modal Controllers
+  const btnCloseSplitSelect = document.getElementById('btn-close-split-select-modal');
+  if (btnCloseSplitSelect) {
+    btnCloseSplitSelect.addEventListener('click', () => {
+      document.getElementById('split-workout-select-modal').close();
+    });
+  }
+
+  const splitSelectModal = document.getElementById('split-workout-select-modal');
+  if (splitSelectModal) enableLightDismiss(splitSelectModal);
 
   // Daily Weight dashboard input and history modal input
   document.getElementById('btn-save-weight').addEventListener('click', () => {
@@ -813,6 +856,10 @@ function setupEventListeners() {
       }
     });
   }
+  } catch (err) {
+    console.error('[PARTIAL+ SETUP ERROR]', err);
+    alert('App initialization error: ' + err.message + '\n\nCheck console for details.');
+  }
 }
 
 // -------------------------------------------------------------
@@ -886,19 +933,20 @@ function initDashboard() {
 
   // Render daily weight display
   renderDashboardWeight();
-
   // Render Calendar widget
   renderCalendar();
 }
 
 function renderTodayRoutineDetails(dateStr) {
+  const dateObj = new Date(dateStr + 'T00:00:00');
+  const todayDayName = WEEKDAYS[dateObj.getDay()];
   const templateDay = getAssignedTemplateDay(dateStr);
   const config = getExpandedRoutineConfig();
   const routine = config[templateDay];
   
   const labelEl = document.getElementById('today-routine-label');
   const exercisesEl = document.getElementById('today-routine-exercises');
-  const swapSelect = document.getElementById('swap-select');
+  const swapTrigger = document.getElementById('swap-select-trigger');
   const startBtn = document.getElementById('btn-start-workout');
 
   const hasCompletedToday = !!state.history[dateStr];
@@ -923,10 +971,10 @@ function renderTodayRoutineDetails(dateStr) {
       startBtn.textContent = 'Edit Workout';
       startBtn.style.display = 'block';
     }
-    swapSelect.disabled = true;
+    if (swapTrigger) swapTrigger.disabled = true;
   } else {
     startBtn.textContent = 'Start Workout';
-    swapSelect.disabled = false;
+    if (swapTrigger) swapTrigger.disabled = false;
     if (routine.isRest) {
       exercisesEl.textContent = 'Enjoy your rest day! Recover well.';
       startBtn.style.display = 'none';
@@ -937,50 +985,71 @@ function renderTodayRoutineDetails(dateStr) {
     }
   }
 
-  // Populate Swaps Dropdown
-  swapSelect.innerHTML = '';
-  
-  const weekId = getWeekMonday(dateStr);
-  const weekDays = getWeekDaysList(weekId);
-  
-  // Repetition prevention: identify templates completed in the current week
-  const completedTemplates = new Set();
-  weekDays.forEach(wd => {
-    const log = state.history[wd.dateStr];
-    if (log && log.templateDay) {
-      completedTemplates.add(log.templateDay);
-    }
-  });
+  // Update Swap Selector UI Text
+  const currentTemplateInfo = config[templateDay];
+  const triggerText = currentTemplateInfo.isRest ? `${todayDayName} (Rest Day)` : `${todayDayName} (${currentTemplateInfo.label})`;
+  const triggerTextEl = document.getElementById('swap-select-current-text');
+  if (triggerTextEl) triggerTextEl.textContent = triggerText;
 
-  const dayNamesOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-  dayNamesOrder.forEach(dayName => {
-    // Resolve what template is assigned to this dayName
-    const assignedTemplate = getTemplateDayForWeekday(dayName, weekId);
-    const info = config[assignedTemplate];
-    const option = document.createElement('option');
-    // The value represents the template day to swap to
-    option.value = assignedTemplate;
+  // Populate Custom Selector menu overlay
+  const menuList = document.getElementById('swap-custom-menu-list');
+  if (menuList) {
+    menuList.innerHTML = '';
     
-    const label = info.isRest ? `${dayName} (Rest Day)` : `${dayName} (${info.label})`;
-    option.textContent = label;
+    const weekId = getWeekMonday(dateStr);
+    const weekDays = getWeekDaysList(weekId);
+    
+    const completedTemplates = new Set();
+    weekDays.forEach(wd => {
+      const log = state.history[wd.dateStr];
+      if (log && log.templateDay) {
+        completedTemplates.add(log.templateDay);
+      }
+    });
 
-    // Select today's current mapped template
-    if (assignedTemplate === templateDay) {
-      option.selected = true;
-    }
+    const dayNamesOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    dayNamesOrder.forEach(dayName => {
+      const assignedTemplate = getTemplateDayForWeekday(dayName, weekId);
+      const info = config[assignedTemplate];
+      
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'swap-capsule-pill';
+      
+      const label = info.isRest ? `${dayName} (Rest Day)` : `${dayName} (${info.label})`;
+      pill.textContent = label;
 
-    // Disable if completed, EXCEPT if it's currently selected, it's a Rest Day, or today is a Rest Day
-    const todayInfo = config[templateDay];
-    if (completedTemplates.has(assignedTemplate) && 
-        assignedTemplate !== templateDay && 
-        !info.isRest && 
-        (!todayInfo || !todayInfo.isRest)) {
-      option.disabled = true;
-      option.textContent += ' [Completed]';
-    }
+      if (assignedTemplate === templateDay) {
+        pill.classList.add('active');
+      } else {
+        pill.classList.add('inactive');
+      }
 
-    swapSelect.appendChild(option);
-  });
+      const todayInfo = config[templateDay];
+      if (completedTemplates.has(assignedTemplate) && 
+          assignedTemplate !== templateDay && 
+          !info.isRest && 
+          (!todayInfo || !todayInfo.isRest)) {
+        pill.classList.add('disabled');
+      }
+
+      pill.addEventListener('click', () => {
+        selectedSwapTargetDay = dayName;
+        if (triggerTextEl) triggerTextEl.textContent = label;
+        
+        const swapBtn = document.getElementById('btn-swap-workout');
+        if (assignedTemplate !== templateDay) {
+          if (swapBtn) swapBtn.style.display = 'block';
+        } else {
+          if (swapBtn) swapBtn.style.display = 'none';
+        }
+        
+        document.getElementById('swap-custom-menu-modal').close();
+      });
+
+      menuList.appendChild(pill);
+    });
+  }
 }
 
 function getWeekDaysList(mondayStr) {
@@ -1000,9 +1069,8 @@ function getWeekDaysList(mondayStr) {
 
 // Dynamic Reciprocal Swap Handler
 async function handleSwapButtonClick() {
-  const swapSelect = document.getElementById('swap-select');
+  if (!selectedSwapTargetDay) return;
   const swapBtn = document.getElementById('btn-swap-workout');
-  const selectedTemplate = swapSelect.value;
   
   // 1. Show loading state
   swapBtn.disabled = true;
@@ -1028,6 +1096,7 @@ async function handleSwapButtonClick() {
   }
   
   const config = getExpandedRoutineConfig();
+  const selectedTemplate = getTemplateDayForWeekday(selectedSwapTargetDay, weekId);
   
   // Check if same template
   if (selectedTemplate === currentTemplate) {
@@ -1058,7 +1127,7 @@ async function handleSwapButtonClick() {
   }
   
   // 3. Perform reciprocal swap
-  executeSwap(todayDayName, selectedTemplate, weekId);
+  executeSwap(todayDayName, selectedSwapTargetDay, weekId);
   
   // 4. Success banner and hide button
   showSwapBanner("Swap completed!", false);
@@ -1082,7 +1151,7 @@ function showSwapBanner(message, isError) {
   }
 }
 
-function executeSwap(todayDayName, selectedTemplateDay, weekId) {
+function executeSwap(sourceDay, targetDay, weekId) {
   if (!state.weekSwaps[weekId]) {
     state.weekSwaps[weekId] = {
       "Monday": "Monday",
@@ -1097,45 +1166,18 @@ function executeSwap(todayDayName, selectedTemplateDay, weekId) {
 
   const currentSwaps = state.weekSwaps[weekId];
 
-  // 1. Undo any existing swap that todayDayName is currently involved in
-  const currentTemplateForToday = currentSwaps[todayDayName];
-  if (currentTemplateForToday !== todayDayName) {
-    let dayHoldingTodayTemplate = '';
-    for (const [day, temp] of Object.entries(currentSwaps)) {
-      if (temp === todayDayName) {
-        dayHoldingTodayTemplate = day;
-        break;
-      }
-    }
-    if (dayHoldingTodayTemplate) {
-      currentSwaps[todayDayName] = todayDayName;
-      currentSwaps[dayHoldingTodayTemplate] = dayHoldingTodayTemplate;
-    }
+  // Perform reciprocal swap of the slots
+  const temp = currentSwaps[sourceDay];
+  currentSwaps[sourceDay] = currentSwaps[targetDay];
+  currentSwaps[targetDay] = temp;
+  
+  if (state.auth.mode === 'user') {
+    localStorage.setItem(KEYS.WEEK_SWAPS, JSON.stringify(state.weekSwaps));
   }
-
-  // 2. Perform the new swap: swap todayDayName with the day currently holding selectedTemplateDay
-  const currentTemplate = currentSwaps[todayDayName]; // which is now todayDayName
-
-  let weekdayToSwap = '';
-  for (const [day, temp] of Object.entries(currentSwaps)) {
-    if (temp === selectedTemplateDay) {
-      weekdayToSwap = day;
-      break;
-    }
-  }
-
-  if (weekdayToSwap) {
-    currentSwaps[todayDayName] = selectedTemplateDay;
-    currentSwaps[weekdayToSwap] = currentTemplate;
-    
-    if (state.auth.mode === 'user') {
-      localStorage.setItem(KEYS.WEEK_SWAPS, JSON.stringify(state.weekSwaps));
-    }
-    
-    const todayStr = getLocalDateString();
-    renderTodayRoutineDetails(todayStr);
-    renderCalendar();
-  }
+  
+  const todayStr = getLocalDateString();
+  renderTodayRoutineDetails(todayStr);
+  renderCalendar();
 }
 
 // -------------------------------------------------------------
@@ -2460,6 +2502,7 @@ async function restoreHistoryFromSheets() {
       workoutRows = result.workouts || [];
       weightRows = result.weights || [];
       exerciseRows = result.exercises || [];
+      const splitRows = result.split || [];
     } else {
       throw new Error("Invalid response format received from Google Sheet.");
     }
@@ -2506,6 +2549,70 @@ async function restoreHistoryFromSheets() {
       });
       state.exerciseRegistry = reconstructedRegistry;
       localStorage.setItem(KEYS.EXERCISE_REGISTRY, JSON.stringify(state.exerciseRegistry));
+    }
+
+    // Restore split configuration and custom day templates
+    if (splitRows.length > 0) {
+      const restoredWeekdayConfig = {
+        "Monday": { label: "Rest Day", isRest: true, exercises: [] },
+        "Tuesday": { label: "Rest Day", isRest: true, exercises: [] },
+        "Wednesday": { label: "Rest Day", isRest: true, exercises: [] },
+        "Thursday": { label: "Rest Day", isRest: true, exercises: [] },
+        "Friday": { label: "Rest Day", isRest: true, exercises: [] },
+        "Saturday": { label: "Rest Day", isRest: true, exercises: [] },
+        "Sunday": { label: "Rest Day", isRest: true, exercises: [] }
+      };
+      const restoredCustomTemplates = {};
+
+      splitRows.forEach(row => {
+        const template = getRowValue(row, ['Template', 'template', 'Workout', 'workout']);
+        const exercisesStr = getRowValue(row, ['Exercises', 'exercises', 'Movements', 'movements']) || '';
+        const protocolsStr = getRowValue(row, ['Protocols', 'protocols', 'Tags', 'tags']) || '';
+        const assignmentStr = getRowValue(row, ['Assignment', 'assignment', 'Day', 'day', 'Days', 'days']) || '';
+
+        if (!template || !assignmentStr) return;
+
+        const exercises = exercisesStr.split(',').map(s => s.trim()).filter(Boolean);
+        const protocols = protocolsStr.split(',').map(s => s.trim()).filter(Boolean);
+        const assignments = assignmentStr.split(',').map(s => s.trim()).filter(Boolean);
+
+        const exObjects = exercises.map((name, idx) => {
+          const protocol = protocols[idx] || 'Base';
+          if (state.exerciseRegistry[name]) {
+            state.exerciseRegistry[name].default_tag = protocol;
+          }
+          return { name };
+        });
+
+        assignments.forEach(asg => {
+          if (asg === 'Custom') {
+            if (template !== 'Rest Day') {
+              restoredCustomTemplates[template] = {
+                label: template,
+                isRest: false,
+                exercises: exObjects
+              };
+            }
+          } else {
+            const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+            if (days.includes(asg)) {
+              if (template === 'Rest Day') {
+                restoredWeekdayConfig[asg] = { label: "Rest Day", isRest: true, exercises: [] };
+              } else {
+                restoredWeekdayConfig[asg] = {
+                  label: template,
+                  isRest: false,
+                  exercises: exObjects
+                };
+              }
+            }
+          }
+        });
+      });
+
+      localStorage.setItem(KEYS.EXERCISE_REGISTRY, JSON.stringify(state.exerciseRegistry));
+      saveRoutineConfig(restoredWeekdayConfig);
+      localStorage.setItem('custom_day_templates', JSON.stringify(restoredCustomTemplates));
     }
     
     // Reconstruct history object
@@ -2938,6 +3045,19 @@ async function runExerciseMigrationOnSheets() {
 function autoLogPastRestDays() {
   if (state.auth.mode !== 'user') return;
   const history = state.history || {};
+  
+  // One-time fix for Saturday, June 27, 2026 Rest Day logging
+  if (!history['2026-06-27']) {
+    history['2026-06-27'] = {
+      date: '2026-06-27',
+      dayLabel: 'Rest Day',
+      templateDay: '',
+      elapsedTime: '00:00',
+      exercises: []
+    };
+    localStorage.setItem(KEYS.HISTORY, JSON.stringify(history));
+    console.log("Logged missing Rest Day on Saturday, June 27, 2026.");
+  }
   
   const startStr = "2026-06-01";
   const startDate = new Date(startStr + 'T00:00:00');
@@ -3603,6 +3723,18 @@ function openSplitPanel() {
   // Deep copy routine template config
   splitDraft = JSON.parse(JSON.stringify(currentConfig));
   
+  // Load custom templates into splitDraft draft state
+  const customTemplates = JSON.parse(localStorage.getItem('custom_day_templates') || '{}');
+  let idx = 1;
+  for (const name in customTemplates) {
+    splitDraft[`_custom_${idx}`] = {
+      label: name,
+      isRest: false,
+      exercises: JSON.parse(JSON.stringify(customTemplates[name].exercises || []))
+    };
+    idx++;
+  }
+  
   // Deep copy exercise registry
   splitDraftRegistry = JSON.parse(JSON.stringify(state.exerciseRegistry || {}));
   
@@ -3621,6 +3753,10 @@ function renderSplitEditor() {
   if (!container) return;
   container.innerHTML = '';
   
+  // Load custom templates
+  const customTemplates = JSON.parse(localStorage.getItem('custom_day_templates') || '{}');
+  const customOptionHtml = Object.keys(customTemplates).map(name => `<option value="${name}">${name}</option>`).join('');
+  
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   days.forEach(day => {
     const card = document.createElement('div');
@@ -3633,31 +3769,26 @@ function renderSplitEditor() {
     header.innerHTML = `<h3 class="day-card-title">${day}</h3>`;
     card.appendChild(header);
     
-    // Selector
+    // Selector (Trigger Button)
     const selectWrapper = document.createElement('div');
     selectWrapper.style.cssText = 'display:flex; flex-direction:column; gap:4px;';
     selectWrapper.innerHTML = `
       <label style="font-size:11px; font-weight:600; color:var(--text-muted); text-align:left;">Choose Workout</label>
-      <select class="dropdown-select split-workout-select" style="width:100%;">
-        <option value="Push">Push</option>
-        <option value="Legs">Legs</option>
-        <option value="Pull">Pull</option>
-        <option value="Upper">Upper</option>
-        <option value="Lower">Lower</option>
-        <option value="Rest Day">Rest</option>
-      </select>
     `;
-    card.appendChild(selectWrapper);
     
-    const select = selectWrapper.querySelector('.split-workout-select');
     const dayData = splitDraft[day] || { label: 'Rest Day', isRest: true, exercises: [] };
+    const displayLabel = dayData.isRest ? 'Rest' : dayData.label;
     
-    // Set active select option
-    if (dayData.isRest) {
-      select.value = 'Rest Day';
-    } else {
-      select.value = dayData.label;
-    }
+    const triggerBtn = document.createElement('button');
+    triggerBtn.type = 'button';
+    triggerBtn.className = 'dropdown-select split-workout-select-trigger';
+    triggerBtn.style.cssText = 'width:100%; text-align:left; display:flex; justify-content:space-between; align-items:center; cursor:pointer; font-weight:600; padding:10px 14px; margin:0;';
+    triggerBtn.innerHTML = `
+      <span>${displayLabel}</span>
+      <span style="font-size:10px; color:var(--text-muted);">▼</span>
+    `;
+    selectWrapper.appendChild(triggerBtn);
+    card.appendChild(selectWrapper);
     
     // Exercises wrapper
     const exListWrapper = document.createElement('div');
@@ -3675,24 +3806,61 @@ function renderSplitEditor() {
     
     container.appendChild(card);
     
-    // Initial display config
-    updateSplitCardDisplay(day, card, select.value);
+    const activeVal = dayData.isRest ? 'Rest Day' : dayData.label;
+    updateSplitCardDisplay(day, card, activeVal);
     
-    // Dropdown change listener
-    select.addEventListener('change', () => {
-      const val = select.value;
-      if (val === 'Rest Day') {
-        splitDraft[day] = { label: 'Rest Day', isRest: true, exercises: [] };
-      } else {
-        // If switching from rest to active workout, preserve existing or start empty
-        const oldData = splitDraft[day];
-        splitDraft[day] = {
-          label: val,
-          isRest: false,
-          exercises: (oldData && !oldData.isRest) ? oldData.exercises : []
-        };
-      }
-      updateSplitCardDisplay(day, card, val);
+    // Custom select trigger listener
+    triggerBtn.addEventListener('click', () => {
+      activeSplitSelectDay = day;
+      const optionsList = document.getElementById('split-workout-options-list');
+      if (!optionsList) return;
+      optionsList.innerHTML = '';
+      
+      const options = ["Push", "Legs", "Pull", "Upper", "Lower", ...Object.keys(customTemplates), "Rest Day"];
+      options.forEach(opt => {
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = 'swap-capsule-pill';
+        
+        const currentVal = splitDraft[day].isRest ? 'Rest Day' : splitDraft[day].label;
+        const optVal = opt === 'Rest Day' ? 'Rest Day' : opt;
+        
+        pill.textContent = opt === 'Rest Day' ? 'Rest' : opt;
+        
+        if (optVal === currentVal) {
+          pill.classList.add('active');
+        } else {
+          pill.classList.add('inactive');
+        }
+        
+        pill.addEventListener('click', () => {
+          const val = optVal;
+          if (val === 'Rest Day') {
+            splitDraft[day] = { label: 'Rest Day', isRest: true, exercises: [] };
+          } else if (customTemplates[val]) {
+            splitDraft[day] = {
+              label: val,
+              isRest: false,
+              exercises: JSON.parse(JSON.stringify(customTemplates[val].exercises || []))
+            };
+          } else {
+            const oldData = splitDraft[day];
+            splitDraft[day] = {
+              label: val,
+              isRest: false,
+              exercises: (oldData && !oldData.isRest && oldData.label === val) ? oldData.exercises : []
+            };
+          }
+          
+          triggerBtn.querySelector('span:first-child').textContent = val === 'Rest Day' ? 'Rest' : val;
+          updateSplitCardDisplay(day, card, val);
+          document.getElementById('split-workout-select-modal').close();
+        });
+        
+        optionsList.appendChild(pill);
+      });
+      
+      document.getElementById('split-workout-select-modal').showModal();
     });
     
     // Add button handler
@@ -3700,6 +3868,78 @@ function renderSplitEditor() {
       openSplitAddModal(day);
     });
   });
+
+  // Render Custom Day Templates
+  const customSectionHeader = document.createElement('div');
+  customSectionHeader.style.cssText = 'font-size:11px; font-weight:700; color:var(--accent-lavender); text-transform:uppercase; letter-spacing:0.5px; margin-top:20px; margin-bottom:8px; text-align:left; padding-left:4px;';
+  customSectionHeader.textContent = 'Custom Workout Templates';
+  container.appendChild(customSectionHeader);
+
+  let hasCustom = false;
+  for (const day in splitDraft) {
+    if (day.startsWith('_custom_')) {
+      hasCustom = true;
+      const dayData = splitDraft[day];
+      
+      const card = document.createElement('div');
+      card.className = 'glass-card day-card';
+      card.setAttribute('data-day', day);
+      
+      // Header with input title and delete button
+      const header = document.createElement('div');
+      header.className = 'day-card-header';
+      header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; width:100%;';
+      header.innerHTML = `
+        <input type="text" class="custom-day-title-input" value="${dayData.label}" placeholder="e.g. Full Body A" style="margin:0; font-family:inherit; font-size:15px; font-weight:700; color:var(--accent-lavender); background:transparent; border:none; border-bottom:1px dashed var(--accent-lavender); border-radius:0; padding:4px 0; width:75%; outline:none;">
+        <button type="button" class="btn-delete-custom-card" style="background:none; border:none; color:var(--accent-red); font-size:20px; cursor:pointer; padding:4px;">&times;</button>
+      `;
+      card.appendChild(header);
+
+      // Title input listener
+      const titleInput = header.querySelector('.custom-day-title-input');
+      titleInput.addEventListener('input', (e) => {
+        dayData.label = e.target.value;
+      });
+
+      // Delete custom day card listener
+      const deleteCardBtn = header.querySelector('.btn-delete-custom-card');
+      deleteCardBtn.addEventListener('click', () => {
+        delete splitDraft[day];
+        renderSplitEditor();
+      });
+
+      // Exercises wrapper
+      const exListWrapper = document.createElement('div');
+      exListWrapper.className = 'split-day-exercises-wrapper';
+      exListWrapper.style.cssText = 'display:flex; flex-direction:column; gap:8px; margin-top:12px;';
+      card.appendChild(exListWrapper);
+      
+      // Add Exercise Button
+      const addBtn = document.createElement('button');
+      addBtn.type = 'button';
+      addBtn.className = 'btn btn-secondary btn-add-split-ex';
+      addBtn.style.cssText = 'width:100%; margin-top:8px; border:1px dashed var(--accent-lavender); color:var(--accent-lavender); background:rgba(191,155,254,0.05); font-weight:700;';
+      addBtn.textContent = '+ Add Exercise';
+      card.appendChild(addBtn);
+      
+      // Add button handler
+      addBtn.addEventListener('click', () => {
+        openSplitAddModal(day);
+      });
+      
+      container.appendChild(card);
+
+      // Render its exercises
+      renderSplitDayExercises(day, exListWrapper);
+    }
+  }
+
+  if (!hasCustom) {
+    const emptyMsg = document.createElement('div');
+    emptyMsg.style.cssText = 'text-align:center; padding:16px; color:var(--text-muted); font-size:13px; font-style:italic;';
+    emptyMsg.textContent = 'No custom templates created yet. Click "+ Create Custom Day" below to add one.';
+    container.appendChild(emptyMsg);
+  }
 }
 
 function updateSplitCardDisplay(day, cardEl, selectValue) {
@@ -3730,12 +3970,12 @@ function renderSplitDayExercises(day, listWrapper) {
     
     const row = document.createElement('div');
     row.className = 'split-exercise-row';
-    row.style.cssText = 'display:flex; flex-direction:column; border:1px solid var(--border-glass); border-radius:12px; background:rgba(255,255,255,0.02); overflow:hidden;';
+    row.style.cssText = 'display:flex; flex-direction:column; border:1px solid var(--border-glass); border-radius:12px; background:rgba(255,255,255,0.02); overflow:hidden; touch-action:none; user-select:none; -webkit-user-select:none; cursor:grab;';
     
     const header = document.createElement('div');
     header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:12px;';
     header.innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:2px; text-align:left;">
+      <div style="display:flex; flex-direction:column; gap:2px; text-align:left; pointer-events:none;">
         <span style="font-size:14px; font-weight:600; color:var(--text-primary);">${ex.name}</span>
         <span style="font-size:11px; color:var(--text-muted);">${reg.muscle_tags}</span>
       </div>
@@ -3803,6 +4043,82 @@ function renderSplitDayExercises(day, listWrapper) {
       dayData.exercises.splice(index, 1);
       // snappy re-render of this day card only
       renderSplitDayExercises(day, listWrapper);
+    });
+    
+    // Long Press Drag & Drop Controller
+    let pressTimer = null;
+    let isDragging = false;
+    let startY = 0;
+    
+    const onPointerMove = (moveEvent) => {
+      if (!isDragging) {
+        if (Math.abs(moveEvent.clientY - startY) > 5) {
+          clearTimeout(pressTimer);
+          window.removeEventListener('pointermove', onPointerMove);
+          window.removeEventListener('pointerup', onPointerUp);
+          window.removeEventListener('pointercancel', onPointerUp);
+        }
+        return;
+      }
+      
+      moveEvent.preventDefault();
+      
+      const siblings = [...listWrapper.querySelectorAll('.split-exercise-row:not(.dragging)')];
+      const nextSibling = siblings.find(sibling => {
+        const rect = sibling.getBoundingClientRect();
+        return moveEvent.clientY <= rect.top + rect.height / 2;
+      });
+      
+      if (nextSibling) {
+        listWrapper.insertBefore(row, nextSibling);
+      } else {
+        listWrapper.appendChild(row);
+      }
+    };
+    
+    const onPointerUp = (upEvent) => {
+      clearTimeout(pressTimer);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      
+      if (isDragging) {
+        row.classList.remove('dragging');
+        row.style.opacity = '';
+        row.style.transform = '';
+        row.style.cursor = 'grab';
+        isDragging = false;
+        
+        // Rebuild exercises array in new order
+        const rows = [...listWrapper.querySelectorAll('.split-exercise-row')];
+        const newExercisesOrder = rows.map(r => {
+          const name = r.querySelector('span').textContent;
+          return { name };
+        });
+        
+        dayData.exercises = newExercisesOrder;
+        renderSplitDayExercises(day, listWrapper);
+      }
+    };
+
+    row.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.protocol-slider-container')) return;
+      
+      startY = e.clientY;
+      
+      window.addEventListener('pointermove', onPointerMove, { passive: false });
+      window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerUp);
+      
+      pressTimer = setTimeout(() => {
+        isDragging = true;
+        row.classList.add('dragging');
+        row.style.opacity = '0.6';
+        row.style.transform = 'scale(1.02)';
+        row.style.cursor = 'grabbing';
+        
+        if (navigator.vibrate) navigator.vibrate(20);
+      }, 300);
     });
     
     listWrapper.appendChild(row);
@@ -4167,12 +4483,118 @@ function saveSplitChanges() {
   state.exerciseRegistry = splitDraftRegistry;
   localStorage.setItem(KEYS.EXERCISE_REGISTRY, JSON.stringify(state.exerciseRegistry));
   
-  // 2. Commit draft routine changes using config.js save Routine
-  saveRoutineConfig(splitDraft);
+  // 2. Separate weekday config from custom templates
+  const weekdayConfig = {};
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  days.forEach(day => {
+    weekdayConfig[day] = splitDraft[day];
+  });
+  
+  const customTemplates = {};
+  for (const key in splitDraft) {
+    if (key.startsWith('_custom_')) {
+      const customDay = splitDraft[key];
+      const name = customDay.label.trim();
+      if (name && name !== 'Rest Day' && name !== 'New Custom Day') {
+        customTemplates[name] = {
+          label: name,
+          isRest: false,
+          exercises: customDay.exercises.map(ex => ({ name: ex.name }))
+        };
+      }
+    }
+  }
+  
+  // 3. Commit weekday config using config.js saveRoutineConfig
+  saveRoutineConfig(weekdayConfig);
+  
+  // 4. Save custom day templates
+  localStorage.setItem('custom_day_templates', JSON.stringify(customTemplates));
+  
+  // 5. Sync to Google Sheets if webhook configured
+  const templateMap = {};
+  
+  // Process Weekdays
+  days.forEach(day => {
+    const dayData = splitDraft[day];
+    if (dayData.isRest) {
+      if (!templateMap["Rest Day"]) {
+        templateMap["Rest Day"] = { exercises: [], protocols: [], assignments: [] };
+      }
+      templateMap["Rest Day"].assignments.push(day);
+    } else {
+      const label = dayData.label;
+      if (!templateMap[label]) {
+        templateMap[label] = { exercises: [], protocols: [], assignments: [] };
+        if (dayData.exercises) {
+          dayData.exercises.forEach(ex => {
+            const regObj = splitDraftRegistry[ex.name] || state.exerciseRegistry[ex.name] || {};
+            const protocol = regObj.default_tag || "Base";
+            templateMap[label].exercises.push(ex.name);
+            templateMap[label].protocols.push(protocol);
+          });
+        }
+      }
+      if (!templateMap[label].assignments.includes(day)) {
+        templateMap[label].assignments.push(day);
+      }
+    }
+  });
+
+  // Process Custom templates
+  for (const key in splitDraft) {
+    if (key.startsWith('_custom_')) {
+      const customDay = splitDraft[key];
+      const name = customDay.label.trim();
+      if (name && name !== 'Rest Day' && name !== 'New Custom Day') {
+        if (!templateMap[name]) {
+          templateMap[name] = { exercises: [], protocols: [], assignments: ["Custom"] };
+          if (customDay.exercises) {
+            customDay.exercises.forEach(ex => {
+              const regObj = splitDraftRegistry[ex.name] || state.exerciseRegistry[ex.name] || {};
+              const protocol = regObj.default_tag || "Base";
+              templateMap[name].exercises.push(ex.name);
+              templateMap[name].protocols.push(protocol);
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Map to Sheets row format
+  const splitDataPayload = Object.keys(templateMap).map(label => {
+    const item = templateMap[label];
+    return {
+      Template: label,
+      Exercises: item.exercises.join(', '),
+      Protocols: item.protocols.join(', '),
+      Assignment: item.assignments.join(', ')
+    };
+  });
+
+  const webhookUrl = getWebhookUrl();
+  if (webhookUrl && !webhookUrl.includes('YOUR_APPS_SCRIPT_ID')) {
+    fetch(webhookUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        action: "UPDATE_SPLIT",
+        split_data: splitDataPayload
+      })
+    }).then(() => {
+      console.log("Split configuration synced to Google Sheets successfully (grouped format).");
+    }).catch(err => {
+      console.error("Failed to sync Split configuration to Google Sheets:", err);
+    });
+  }
   
   alert("Split Configuration and Exercise Registry changes successfully saved.");
   
-  // 3. Return to dashboard and init
+  // 6. Return to dashboard and init
   showView('dashboard-view', 'backward');
   initDashboard();
 }
@@ -4299,6 +4721,18 @@ function getStartOfWeek(dateStr) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function isExcludedNote(note) {
+  if (!note) return false;
+  const lower = note.toLowerCase();
+  return lower.includes('#exclude') || lower.includes('[exclude]') || lower.includes('exclude:true') || lower.includes('@exclude');
+}
+
+function isBaselineNote(note) {
+  if (!note) return false;
+  const lower = note.toLowerCase();
+  return lower.includes('#baseline') || lower.includes('[baseline]') || lower.includes('baseline:true') || lower.includes('@baseline');
+}
+
 // 2. Data Filtering and Normalization Engine
 function processAnalyticsData() {
   const startDate = getRangeStartDate(analyticsState.currentRange);
@@ -4306,25 +4740,189 @@ function processAnalyticsData() {
   
   // Filter history logs chronologically
   const sortedDates = Object.keys(state.history).sort();
+
+  // 1. Chronological pass: Calculate raw daily averages and extrapolate starting baselines
+  const exerciseBaselines = {}; // exName -> array of { date: string, val: float, isManual: boolean }
+  const exerciseDailyE1RMs = {}; // exName -> array of { date: string, val: float }
+  
+  const rollingGroupUPIs = {
+    'legs': 100,
+    'back': 100,
+    'chest': 100,
+    'shoulders': 100,
+    'arms': 100
+  };
+
+  sortedDates.forEach(dateStr => {
+    const workout = state.history[dateStr];
+    if (!workout || !workout.exercises) return;
+    if (isExcludedNote(workout.workoutNote)) return;
+
+    const rawE1RMs = {};
+    workout.exercises.forEach(ex => {
+      if (analyticsState.excludeNotes && ex.workoutNote && ex.workoutNote.trim()) return;
+      if (isExcludedNote(ex.workoutNote)) return;
+      if (!ex.setData || !Array.isArray(ex.setData)) return;
+
+      let sumE1RM = 0;
+      let count = 0;
+      ex.setData.forEach(set => {
+        const e1rm = calculateExerciseE1RM(set.weight, set.reps, set.rir, ex.tag);
+        if (e1rm > 0) {
+          sumE1RM += e1rm;
+          count++;
+        }
+      });
+
+      if (count > 0) {
+        rawE1RMs[ex.name] = sumE1RM / count;
+      }
+    });
+
+    Object.keys(rawE1RMs).forEach(exName => {
+      const rawVal = rawE1RMs[exName];
+      const exObj = workout.exercises.find(e => e.name === exName);
+      const isManualBaseline = isBaselineNote(workout.workoutNote) || (exObj && isBaselineNote(exObj.workoutNote));
+
+      if (!exerciseBaselines[exName]) {
+        // First time ever seeing this exercise - estimate its starting baseline!
+        const rawTags = getExerciseTarget(exName) || '';
+        const muscles = rawTags.split(/[,\/]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+        
+        let primaryGroup = 'chest';
+        if (muscles.length > 0) {
+          const primaryMuscle = muscles[0];
+          ['legs', 'back', 'chest', 'shoulders', 'arms'].forEach(g => {
+            if (belongsToGroup(primaryMuscle, g)) {
+              primaryGroup = g;
+            }
+          });
+        }
+
+        const currentGroupUPI = rollingGroupUPIs[primaryGroup] || 100;
+        const estimatedBaseline = rawVal / (currentGroupUPI / 100);
+
+        exerciseBaselines[exName] = [{
+          date: dateStr,
+          val: estimatedBaseline,
+          isManual: false
+        }];
+      } else if (isManualBaseline) {
+        exerciseBaselines[exName].push({
+          date: dateStr,
+          val: rawVal,
+          isManual: true
+        });
+      }
+    });
+
+    const dailyExUPIs = {};
+    Object.keys(rawE1RMs).forEach(exName => {
+      const rawVal = rawE1RMs[exName];
+      const match = exerciseBaselines[exName].filter(b => b.date <= dateStr).pop();
+      const activeBaseline = match ? match.val : rawVal;
+      
+      const upi = (rawVal / activeBaseline) * 100;
+      dailyExUPIs[exName] = upi;
+
+      if (!exerciseDailyE1RMs[exName]) {
+        exerciseDailyE1RMs[exName] = [];
+      }
+      exerciseDailyE1RMs[exName].push({
+        date: dateStr,
+        val: rawVal
+      });
+    });
+
+    // Group active UPIs into muscle groups to update rollingGroupUPIs
+    const dailyGroupUPI = {
+      'legs': { sum: 0, weight: 0 },
+      'back': { sum: 0, weight: 0 },
+      'chest': { sum: 0, weight: 0 },
+      'shoulders': { sum: 0, weight: 0 },
+      'arms': { sum: 0, weight: 0 }
+    };
+
+    for (const exName in dailyExUPIs) {
+      const upi = dailyExUPIs[exName];
+      const rawTags = getExerciseTarget(exName) || '';
+      const muscles = rawTags.split(/[,\/]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+      
+      if (muscles.length > 0) {
+        const primary = muscles[0];
+        const secondary = muscles[1] || '';
+        
+        ['legs', 'back', 'chest', 'shoulders', 'arms'].forEach(g => {
+          if (belongsToGroup(primary, g)) {
+            dailyGroupUPI[g].sum += upi * 1.0;
+            dailyGroupUPI[g].weight += 1.0;
+          } else if (belongsToGroup(secondary, g)) {
+            dailyGroupUPI[g].sum += upi * 0.3;
+            dailyGroupUPI[g].weight += 0.3;
+          }
+        });
+      }
+    }
+
+    ['legs', 'back', 'chest', 'shoulders', 'arms'].forEach(g => {
+      if (dailyGroupUPI[g].weight > 0) {
+        rollingGroupUPIs[g] = dailyGroupUPI[g].sum / dailyGroupUPI[g].weight;
+      }
+    });
+  });
+
+  const getExerciseBaselineForDate = (exName, dateStr) => {
+    const points = exerciseBaselines[exName];
+    if (!points || points.length === 0) return null;
+    
+    const pastPoints = points.filter(p => p.date <= dateStr);
+    if (pastPoints.length === 0) return points[0].val;
+    
+    const match = pastPoints.pop();
+    return match ? match.val : points[0].val;
+  };
   
   if (analyticsState.currentMetricType === 'weight') {
     // ---------------------------------------------------------
     // BODY WEIGHT TRACKER
     // ---------------------------------------------------------
     const weightDates = Object.keys(state.weightHistory).sort();
-    let baselineWeight = null;
+    
+    // Find weight baselines
+    const weightBaselines = [];
+    weightDates.forEach(dateStr => {
+      const workout = state.history[dateStr];
+      if (workout && isBaselineNote(workout.workoutNote)) {
+        weightBaselines.push({ date: dateStr, val: parseFloat(state.weightHistory[dateStr]) });
+      }
+    });
+    
+    let firstWeight = null;
+    for (let i = 0; i < weightDates.length; i++) {
+      const w = parseFloat(state.weightHistory[weightDates[i]]);
+      if (w > 0) {
+        firstWeight = w;
+        break;
+      }
+    }
     
     weightDates.forEach(dateStr => {
       const d = new Date(dateStr + 'T00:00:00');
       if (d >= startDate) {
+        const workout = state.history[dateStr];
+        if (workout && isExcludedNote(workout.workoutNote)) {
+          return;
+        }
+        
         const val = parseFloat(state.weightHistory[dateStr]);
         if (val > 0) {
-          if (baselineWeight === null) {
-            baselineWeight = val;
+          const match = weightBaselines.filter(b => b.date <= dateStr).pop();
+          const activeBaseline = match ? match.val : firstWeight;
+          
+          if (activeBaseline > 0) {
+            const pct = (val / activeBaseline) * 100;
+            logs.push({ date: dateStr, value: pct, rawVal: val, unit: 'lbs', hasNote: false, workoutNote: '' });
           }
-          // Relative to baseline (100%)
-          const pct = (val / baselineWeight) * 100;
-          logs.push({ date: dateStr, value: pct, rawVal: val, unit: 'lbs', hasNote: false, workoutNote: '' });
         }
       }
     });
@@ -4333,34 +4931,33 @@ function processAnalyticsData() {
     // EXERCISE e1RM TRACKER
     // ---------------------------------------------------------
     const targetEx = analyticsState.selectedMetric;
-    let baselineE1RM = null;
     
     sortedDates.forEach(dateStr => {
-      const d = new Date(dateStr + 'T00:00:00');
-      if (d >= startDate) {
-        const workout = state.history[dateStr];
-        const ex = workout.exercises.find(e => e.name === targetEx);
-        if (ex && ex.setData && ex.setData.length > 0) {
-          // If we exclude notes, skip this day completely if workoutNote exists
-          if (analyticsState.excludeNotes && ex.workoutNote && ex.workoutNote.trim()) {
-            return;
+      const workout = state.history[dateStr];
+      if (!workout || !workout.exercises) return;
+      if (isExcludedNote(workout.workoutNote)) return;
+      
+      const ex = workout.exercises.find(e => e.name === targetEx);
+      if (ex && ex.setData && ex.setData.length > 0) {
+        if (analyticsState.excludeNotes && ex.workoutNote && ex.workoutNote.trim()) {
+          return;
+        }
+        if (isExcludedNote(ex.workoutNote)) return;
+        
+        let sumE1RM = 0;
+        let count = 0;
+        ex.setData.forEach(set => {
+          const e1rm = calculateExerciseE1RM(set.weight, set.reps, set.rir, ex.tag);
+          if (e1rm > 0) {
+            sumE1RM += e1rm;
+            count++;
           }
-          // Average e1RM of all completed sets on this day
-          let sumE1RM = 0;
-          let count = 0;
-          ex.setData.forEach(set => {
-            const e1rm = calculateExerciseE1RM(set.weight, set.reps, set.rir, ex.tag);
-            if (e1rm > 0) {
-              sumE1RM += e1rm;
-              count++;
-            }
-          });
-          if (count > 0) {
-            const dailyAvg = sumE1RM / count;
-            if (baselineE1RM === null) {
-              baselineE1RM = dailyAvg;
-            }
-            const pct = (dailyAvg / baselineE1RM) * 100;
+        });
+        if (count > 0) {
+          const dailyAvg = sumE1RM / count;
+          const baseline = getExerciseBaselineForDate(targetEx, dateStr);
+          if (baseline > 0) {
+            const pct = (dailyAvg / baseline) * 100;
             const hasNote = !!(ex.workoutNote && ex.workoutNote.trim());
             logs.push({
               date: dateStr,
@@ -4380,38 +4977,17 @@ function processAnalyticsData() {
     // ---------------------------------------------------------
     const targetMuscleGroup = analyticsState.selectedMetric;
     
-    // Find all baseline e1RMs for all exercises in the selected date range
-    const exerciseBaselines = {}; // exerciseName -> baselineE1RM
-    
-    // Pass 1: Find baseline e1RM for each exercise in this range
-    sortedDates.forEach(dateStr => {
-      const d = new Date(dateStr + 'T00:00:00');
-      if (d >= startDate) {
-        const workout = state.history[dateStr];
-        workout.exercises.forEach(ex => {
-          if (analyticsState.excludeNotes && ex.workoutNote && ex.workoutNote.trim()) {
-            return;
-          }
-          if (!exerciseBaselines[ex.name]) {
-            let sumE1RM = 0;
-            let count = 0;
-            ex.setData.forEach(set => {
-              const e1rm = calculateExerciseE1RM(set.weight, set.reps, set.rir, ex.tag);
-              if (e1rm > 0) {
-                sumE1RM += e1rm;
-                count++;
-              }
-            });
-            if (count > 0) {
-              exerciseBaselines[ex.name] = sumE1RM / count;
-            }
-          }
-        });
-      }
-    });
+    // Track last known values for carry forward
+    const lastKnownGroups = {
+      'legs': 100,
+      'back': 100,
+      'chest': 100,
+      'shoulders': 100,
+      'arms': 100
+    };
     
     // Helper to calculate daily average UPI% for a specific group
-    const getGroupDailyUPI = (workout, targetGroup) => {
+    const getGroupDailyUPI = (workout, targetGroup, dateStr) => {
       let sumUPI = 0;
       let sumWeight = 0;
       let hasNote = false;
@@ -4421,8 +4997,9 @@ function processAnalyticsData() {
         if (analyticsState.excludeNotes && ex.workoutNote && ex.workoutNote.trim()) {
           return;
         }
+        if (isExcludedNote(ex.workoutNote)) return;
         
-        const baseline = exerciseBaselines[ex.name];
+        const baseline = getExerciseBaselineForDate(ex.name, dateStr);
         if (!baseline) return;
         
         // Calculate daily average e1RM
@@ -4477,7 +5054,7 @@ function processAnalyticsData() {
     };
     
     // Track last known values for carry forward
-    const lastKnownGroups = {
+    const lastKnownWeeklyGroups = {
       'legs': 100,
       'back': 100,
       'chest': 100,
@@ -4485,120 +5062,125 @@ function processAnalyticsData() {
       'arms': 100
     };
     
-    if (targetMuscleGroup === 'Full Body') {
-      // Group workouts in the selected date range by week start date (Monday)
-      const workoutsByWeek = {}; // weekKey -> array of { date: string, workout: object }
+    // Group workouts in the selected date range by week start date (Monday)
+    const workoutsByWeek = {}; // weekKey -> array of { date: string, workout: object }
+    
+    sortedDates.forEach(dateStr => {
+      const d = new Date(dateStr + 'T00:00:00');
+      if (d >= startDate) {
+        const workout = state.history[dateStr];
+        if (!workout || !workout.exercises) return;
+        if (isExcludedNote(workout.workoutNote)) return;
+        
+        const weekKey = getStartOfWeek(dateStr);
+        if (!workoutsByWeek[weekKey]) {
+          workoutsByWeek[weekKey] = [];
+        }
+        workoutsByWeek[weekKey].push({ date: dateStr, workout: workout });
+      }
+    });
+    
+    const weekKeys = Object.keys(workoutsByWeek).sort();
+    
+    weekKeys.forEach(weekKey => {
+      const dayNotesList = [];
+      let dayHasNote = false;
       
-      sortedDates.forEach(dateStr => {
-        const d = new Date(dateStr + 'T00:00:00');
-        if (d >= startDate) {
-          const weekKey = getStartOfWeek(dateStr);
-          if (!workoutsByWeek[weekKey]) {
-            workoutsByWeek[weekKey] = [];
+      // Collate all exercises trained in this week
+      const weeklyExData = {}; // name -> { sum: 0, count: 0, notes: [] }
+      
+      workoutsByWeek[weekKey].forEach(({ date, workout }) => {
+        workout.exercises.forEach(ex => {
+          if (analyticsState.excludeNotes && ex.workoutNote && ex.workoutNote.trim()) {
+            return;
           }
-          workoutsByWeek[weekKey].push({ date: dateStr, workout: state.history[dateStr] });
+          if (isExcludedNote(ex.workoutNote)) return;
+          
+          if (!weeklyExData[ex.name]) {
+            weeklyExData[ex.name] = { sum: 0, count: 0, notes: [] };
+          }
+          
+          ex.setData.forEach(set => {
+            const e1rm = calculateExerciseE1RM(set.weight, set.reps, set.rir, ex.tag);
+            if (e1rm > 0) {
+              weeklyExData[ex.name].sum += e1rm;
+              weeklyExData[ex.name].count++;
+            }
+          });
+          
+          if (ex.workoutNote && ex.workoutNote.trim()) {
+            weeklyExData[ex.name].notes.push(ex.workoutNote.trim());
+          }
+        });
+      });
+      
+      // Calculate weekly UPI% for each exercise trained
+      const weeklyExUPI = {};
+      for (const name in weeklyExData) {
+        const data = weeklyExData[name];
+        const baseline = getExerciseBaselineForDate(name, weekKey);
+        if (baseline && data.count > 0) {
+          const avgE1RM = data.sum / data.count;
+          weeklyExUPI[name] = (avgE1RM / baseline) * 100;
+          
+          if (data.notes.length > 0) {
+            dayHasNote = true;
+            data.notes.forEach(n => {
+              if (!dayNotesList.includes(`${name}: ${n}`)) {
+                dayNotesList.push(`${name}: ${n}`);
+              }
+            });
+          }
+        }
+      }
+      
+      // Group the weekly exercise UPIs into muscle groups
+      const weeklyGroupUPI = {
+        'legs': { sum: 0, weight: 0 },
+        'back': { sum: 0, weight: 0 },
+        'chest': { sum: 0, weight: 0 },
+        'shoulders': { sum: 0, weight: 0 },
+        'arms': { sum: 0, weight: 0 }
+      };
+      
+      for (const name in weeklyExUPI) {
+        const upi = weeklyExUPI[name];
+        const rawTags = getExerciseTarget(name) || '';
+        const muscles = rawTags.split(/[,\/]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+        
+        if (muscles.length > 0) {
+          const primary = muscles[0];
+          const secondary = muscles[1] || '';
+          
+          ['legs', 'back', 'chest', 'shoulders', 'arms'].forEach(g => {
+            if (belongsToGroup(primary, g)) {
+              weeklyGroupUPI[g].sum += upi * 1.0;
+              weeklyGroupUPI[g].weight += 1.0;
+            } else if (belongsToGroup(secondary, g)) {
+              weeklyGroupUPI[g].sum += upi * 0.3;
+              weeklyGroupUPI[g].weight += 0.3;
+            }
+          });
+        }
+      }
+      
+      // Update carry-forward values
+      let activeInWeek = false;
+      ['legs', 'back', 'chest', 'shoulders', 'arms'].forEach(g => {
+        if (weeklyGroupUPI[g].weight > 0) {
+          lastKnownWeeklyGroups[g] = weeklyGroupUPI[g].sum / weeklyGroupUPI[g].weight;
+          activeInWeek = true;
         }
       });
       
-      const weekKeys = Object.keys(workoutsByWeek).sort();
-      
-      weekKeys.forEach(weekKey => {
-        const dayNotesList = [];
-        let dayHasNote = false;
-        
-        // Collate all exercises trained in this week
-        const weeklyExData = {}; // name -> { sum: 0, count: 0, notes: [] }
-        
-        workoutsByWeek[weekKey].forEach(({ date, workout }) => {
-          workout.exercises.forEach(ex => {
-            if (analyticsState.excludeNotes && ex.workoutNote && ex.workoutNote.trim()) {
-              return;
-            }
-            
-            if (!weeklyExData[ex.name]) {
-              weeklyExData[ex.name] = { sum: 0, count: 0, notes: [] };
-            }
-            
-            ex.setData.forEach(set => {
-              const e1rm = calculateExerciseE1RM(set.weight, set.reps, set.rir, ex.tag);
-              if (e1rm > 0) {
-                weeklyExData[ex.name].sum += e1rm;
-                weeklyExData[ex.name].count++;
-              }
-            });
-            
-            if (ex.workoutNote && ex.workoutNote.trim()) {
-              weeklyExData[ex.name].notes.push(ex.workoutNote.trim());
-            }
-          });
-        });
-        
-        // Calculate weekly UPI% for each exercise trained
-        const weeklyExUPI = {};
-        for (const name in weeklyExData) {
-          const data = weeklyExData[name];
-          const baseline = exerciseBaselines[name];
-          if (baseline && data.count > 0) {
-            const avgE1RM = data.sum / data.count;
-            weeklyExUPI[name] = (avgE1RM / baseline) * 100;
-            
-            if (data.notes.length > 0) {
-              dayHasNote = true;
-              data.notes.forEach(n => {
-                if (!dayNotesList.includes(`${name}: ${n}`)) {
-                  dayNotesList.push(`${name}: ${n}`);
-                }
-              });
-            }
-          }
-        }
-        
-        // Group the weekly exercise UPIs into muscle groups
-        const weeklyGroupUPI = {
-          'legs': { sum: 0, weight: 0 },
-          'back': { sum: 0, weight: 0 },
-          'chest': { sum: 0, weight: 0 },
-          'shoulders': { sum: 0, weight: 0 },
-          'arms': { sum: 0, weight: 0 }
-        };
-        
-        for (const name in weeklyExUPI) {
-          const upi = weeklyExUPI[name];
-          const rawTags = getExerciseTarget(name) || '';
-          const muscles = rawTags.split(/[,\/]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
-          
-          if (muscles.length > 0) {
-            const primary = muscles[0];
-            const secondary = muscles[1] || '';
-            
-            ['legs', 'back', 'chest', 'shoulders', 'arms'].forEach(g => {
-              if (belongsToGroup(primary, g)) {
-                weeklyGroupUPI[g].sum += upi * 1.0;
-                weeklyGroupUPI[g].weight += 1.0;
-              } else if (belongsToGroup(secondary, g)) {
-                weeklyGroupUPI[g].sum += upi * 0.3;
-                weeklyGroupUPI[g].weight += 0.3;
-              }
-            });
-          }
-        }
-        
-        // Update carry-forward values
-        let activeInWeek = false;
-        ['legs', 'back', 'chest', 'shoulders', 'arms'].forEach(g => {
-          if (weeklyGroupUPI[g].weight > 0) {
-            lastKnownGroups[g] = weeklyGroupUPI[g].sum / weeklyGroupUPI[g].weight;
-            activeInWeek = true;
-          }
-        });
-        
-        if (activeInWeek) {
+      if (activeInWeek) {
+        if (targetMuscleGroup === 'Full Body') {
           const masterVal = 
-            lastKnownGroups['legs'] * 0.22 +
-            lastKnownGroups['back'] * 0.22 +
-            lastKnownGroups['chest'] * 0.22 +
-            lastKnownGroups['shoulders'] * 0.18 +
-            lastKnownGroups['arms'] * 0.16;
+            lastKnownWeeklyGroups['legs'] * 0.22 +
+            lastKnownWeeklyGroups['back'] * 0.22 +
+            lastKnownWeeklyGroups['chest'] * 0.22 +
+            lastKnownWeeklyGroups['shoulders'] * 0.18 +
+            lastKnownWeeklyGroups['arms'] * 0.16;
           
           logs.push({
             date: weekKey,
@@ -4608,28 +5190,20 @@ function processAnalyticsData() {
             hasNote: dayHasNote,
             workoutNote: dayNotesList.join(' | ')
           });
+        } else {
+          const gKey = targetMuscleGroup.toLowerCase();
+          const val = lastKnownWeeklyGroups[gKey];
+          logs.push({
+            date: weekKey,
+            value: val,
+            rawVal: val,
+            unit: '%',
+            hasNote: dayHasNote,
+            workoutNote: dayNotesList.join(' | ')
+          });
         }
-      });
-    } else {
-      // Specific Muscle Group logic (Daily)
-      sortedDates.forEach(dateStr => {
-        const d = new Date(dateStr + 'T00:00:00');
-        if (d >= startDate) {
-          const workout = state.history[dateStr];
-          const res = getGroupDailyUPI(workout, targetMuscleGroup);
-          if (res.value !== null) {
-            logs.push({
-              date: dateStr,
-              value: res.value,
-              rawVal: res.value,
-              unit: '%',
-              hasNote: res.hasNote,
-              workoutNote: res.workoutNote
-            });
-          }
-        }
-      });
-    }
+      }
+    });
   }
   
   return logs;
@@ -4782,17 +5356,110 @@ function renderAnalyticsChart(data, drawLine = true) {
   
       titleEl.textContent = titleText;
   
+      // Determine exercises to display
+      let exercisesToDisplay = [];
+      if (analyticsState.currentMetricType === 'exercise') {
+        const workout = state.history[d.date];
+        if (workout && workout.exercises) {
+          workout.exercises.forEach(ex => {
+            if (ex.name === analyticsState.selectedMetric) {
+              exercisesToDisplay.push({
+                name: ex.name,
+                tag: ex.tag,
+                setData: ex.setData,
+                workoutNote: ex.workoutNote
+              });
+            }
+          });
+        }
+      } else if (analyticsState.currentMetricType === 'muscle') {
+        const targetGroup = analyticsState.selectedMetric;
+        if (targetGroup === 'Full Body') {
+          const startDay = new Date(d.date + 'T00:00:00');
+          const endDay = new Date(startDay.getTime() + 7 * 24 * 60 * 60 * 1000);
+          Object.keys(state.history).sort().forEach(dateKey => {
+            const entryDate = new Date(dateKey + 'T00:00:00');
+            if (entryDate >= startDay && entryDate < endDay) {
+              const workout = state.history[dateKey];
+              workout.exercises.forEach(ex => {
+                exercisesToDisplay.push({
+                  name: ex.name,
+                  tag: ex.tag,
+                  setData: ex.setData,
+                  workoutNote: ex.workoutNote
+                });
+              });
+            }
+          });
+        } else {
+          const workout = state.history[d.date];
+          if (workout && workout.exercises) {
+            workout.exercises.forEach(ex => {
+              const rawTags = ex.target || getExerciseTarget(ex.name) || '';
+              const muscles = rawTags.split(/[,\/]+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+              if (muscles.length > 0) {
+                const primary = muscles[0];
+                const secondary = muscles[1] || '';
+                if (belongsToGroup(primary, targetGroup.toLowerCase()) || belongsToGroup(secondary, targetGroup.toLowerCase())) {
+                  exercisesToDisplay.push({
+                    name: ex.name,
+                    tag: ex.tag,
+                    setData: ex.setData,
+                    workoutNote: ex.workoutNote
+                  });
+                }
+              }
+            });
+          }
+        }
+      }
+      
+      let exercisesHtml = '';
+      if (exercisesToDisplay.length > 0) {
+        exercisesHtml = exercisesToDisplay.map(ex => `
+          <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-glass); border-radius:16px; padding:12px; margin-top:8px; display:flex; flex-direction:column; gap:8px; text-align:left;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <span style="font-size:13px; font-weight:700; color:var(--text-primary);">${ex.name}</span>
+              <span class="tag-badge ${ex.tag.toLowerCase()}">${ex.tag}</span>
+            </div>
+            ${ex.workoutNote && ex.workoutNote.trim() ? `
+              <div style="font-size:11px; font-style:italic; color:var(--accent-gold); padding:4px 8px; background:rgba(252, 163, 17, 0.05); border:1px solid rgba(252, 163, 17, 0.15); border-radius:8px;">
+                Note: ${ex.workoutNote.trim()}
+              </div>
+            ` : ''}
+            <div style="display:grid; grid-template-columns:1.2fr 2.5fr 1.5fr 1.5fr; gap:6px; font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; text-align:center; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.05);">
+              <div>Set</div>
+              <div>Weight</div>
+              <div>Reps</div>
+              <div>RIR</div>
+            </div>
+            ${ex.setData.map((set, setIdx) => `
+              <div style="display:grid; grid-template-columns:1.2fr 2.5fr 1.5fr 1.5fr; gap:6px; text-align:center; font-size:12px; color:var(--text-primary); padding-top:4px;">
+                <div>${setIdx + 1}</div>
+                <div>${set.weight} lbs</div>
+                <div>${set.reps}</div>
+                <div>${set.rir}</div>
+              </div>
+            `).join('')}
+          </div>
+        `).join('');
+      } else if (analyticsState.currentMetricType === 'weight') {
+        exercisesHtml = `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); border:1px solid var(--border-glass); border-radius:16px; padding:12px; margin-top:8px;">
+            <span style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Body Weight</span>
+            <span style="font-size:14px; font-weight:600; color:var(--text-primary);">${Math.round(d.rawVal)} lbs</span>
+          </div>
+        `;
+      }
+  
       bodyEl.innerHTML = `
         <div style="display:flex; flex-direction:column; gap:12px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <span style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Performance</span>
             <span class="tag-badge llp" style="font-size:14px; font-weight:700; color:var(--accent-lavender); padding:4px 8px; border-radius:8px;">${Math.round(d.value)}%</span>
           </div>
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span style="font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">Measurement</span>
-            <span style="font-size:14px; font-weight:600; color:var(--text-primary);">${Math.round(d.rawVal)} ${d.unit}</span>
-          </div>
-          ${d.hasNote && d.workoutNote ? `
+          ${exercisesHtml}
+          ${d.hasNote && d.workoutNote && !exercisesToDisplay.some(ex => ex.workoutNote && ex.workoutNote.trim() === d.workoutNote.trim()) ? `
           <div style="background:rgba(252, 163, 17, 0.08); border:1px solid rgba(252, 163, 17, 0.25); border-radius:12px; padding:10px 12px; margin-top:4px; text-align:left;">
             <div style="font-size:11px; font-weight:700; color:var(--accent-gold); text-transform:uppercase; margin-bottom:4px; letter-spacing:0.5px;">Note</div>
             <div style="font-size:12px; color:var(--text-secondary); line-height:1.4; font-style:italic;">${d.workoutNote}</div>
@@ -5315,3 +5982,194 @@ function renderAnalyticsExercisesList(searchTerm) {
     container.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">No matching exercises found.</div>`;
   }
 }
+
+// -------------------------------------------------------------
+// Mid-Workout Inject Exercise Module
+// -------------------------------------------------------------
+function setupWorkoutAddExerciseListeners() {
+  const btnAdd = document.getElementById('btn-workout-add-exercise');
+  if (btnAdd) {
+    btnAdd.addEventListener('click', () => {
+      const activeWorkout = state.activeWorkout;
+      if (!activeWorkout || !activeWorkout.isActive) return;
+
+      document.getElementById('workout-add-search-input').value = '';
+      renderWorkoutAddList('');
+
+      const modal = document.getElementById('workout-add-exercise-modal');
+      if (modal) modal.showModal();
+    });
+  }
+
+  const searchInput = document.getElementById('workout-add-search-input');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      renderWorkoutAddList(searchInput.value);
+    });
+  }
+
+  const btnClose = document.getElementById('btn-close-workout-add-modal');
+  if (btnClose) {
+    btnClose.addEventListener('click', () => {
+      document.getElementById('workout-add-exercise-modal').close();
+    });
+  }
+
+  const modal = document.getElementById('workout-add-exercise-modal');
+  if (modal) enableLightDismiss(modal);
+}
+
+function renderWorkoutAddList(searchTerm) {
+  const highSimList = document.getElementById('workout-add-high-similarity-list');
+  const alphaList = document.getElementById('workout-add-alphabetical-list');
+  if (!highSimList || !alphaList) return;
+
+  highSimList.innerHTML = '';
+  alphaList.innerHTML = '';
+
+  const term = searchTerm.trim().toLowerCase();
+  const currentExNames = (state.activeWorkout.exercises || []).map(e => e.name);
+
+  const dayLabel = state.activeWorkout.dayLabel || '';
+  const typicalTargets = WORKOUT_TYPICAL_TARGETS[dayLabel] || '';
+
+  const candidates = [];
+  for (const name in state.exerciseRegistry) {
+    if (currentExNames.includes(name)) continue;
+
+    if (term && !name.toLowerCase().includes(term) && !state.exerciseRegistry[name].muscle_tags.toLowerCase().includes(term)) {
+      continue;
+    }
+
+    const candidateObj = state.exerciseRegistry[name];
+    const score = getWorkoutSimilarityScore(typicalTargets, candidateObj);
+    candidates.push({ name, ...candidateObj, score });
+  }
+
+  const highSimCandidates = candidates
+    .filter(c => c.score > 0)
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+    
+  const alphaCandidates = candidates
+    .filter(c => c.score === 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const highSimSection = document.getElementById('workout-add-high-similarity-section');
+  if (highSimCandidates.length > 0) {
+    highSimSection.style.display = 'flex';
+    highSimCandidates.forEach(cand => {
+      highSimList.appendChild(createWorkoutAddRow(cand));
+    });
+  } else {
+    highSimSection.style.display = 'none';
+  }
+
+  const alphaDivider = document.getElementById('workout-add-alphabetical-divider');
+  if (alphaCandidates.length > 0) {
+    alphaDivider.style.display = 'flex';
+    alphaCandidates.forEach(cand => {
+      alphaList.appendChild(createWorkoutAddRow(cand));
+    });
+  } else {
+    alphaDivider.style.display = 'none';
+  }
+}
+
+function createWorkoutAddRow(cand) {
+  const row = document.createElement('div');
+  row.className = 'substitution-row';
+  row.style.cssText = 'display:flex; flex-direction:column; border:1px solid var(--border-glass); border-radius:12px; background:rgba(255,255,255,0.02); overflow:hidden; transition:all 0.3s; margin-bottom:6px;';
+
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:12px; cursor:pointer;';
+  
+  const tagClass = cand.default_tag.toLowerCase();
+  header.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:2px; text-align:left;">
+      <span style="font-size:14px; font-weight:600; color:var(--text-primary);">${cand.name}</span>
+      <span style="font-size:11px; color:var(--text-muted);">${cand.muscle_tags}</span>
+    </div>
+    <span class="tag-badge ${tagClass}" style="text-transform:uppercase;">${cand.default_tag}</span>
+  `;
+
+  const expansion = document.createElement('div');
+  expansion.style.cssText = 'display:none; flex-direction:column; gap:10px; padding:0 12px 12px 12px; border-top:1px solid rgba(255,255,255,0.05); background:rgba(255,255,255,0.01);';
+  expansion.innerHTML = `
+    <div style="font-size:11px; font-weight:600; color:var(--text-muted); margin-top:8px; text-align:left;">Choose intensity protocol</div>
+    <div class="protocol-slider-container" style="position:relative; display:flex; height:32px; background:rgba(0,0,0,0.2); border:1px solid var(--border-glass); border-radius:16px; overflow:hidden; padding:2px;">
+      <div class="slider-thumb" style="position:absolute; top:2px; bottom:2px; left:2px; width:calc(33.33% - 2px); border-radius:14px; transition:transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); pointer-events:none;"></div>
+      <button type="button" class="protocol-btn" data-tag="HC" style="flex:1; background:none; border:none; font-family:inherit; font-size:11px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">HC</button>
+      <button type="button" class="protocol-btn" data-tag="LLP" style="flex:1; background:none; border:none; font-family:inherit; font-size:11px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">LLP</button>
+      <button type="button" class="protocol-btn" data-tag="Base" style="flex:1; background:none; border:none; font-family:inherit; font-size:11px; font-weight:700; z-index:2; cursor:pointer; transition:color 0.2s;">Base</button>
+    </div>
+    <button type="button" class="btn btn-confirm-workout-add-ex" style="width:100%; padding:8px; font-size:12px; font-weight:700; margin-top:4px;">Add Exercise</button>
+  `;
+
+  row.appendChild(header);
+  row.appendChild(expansion);
+
+  let selectedTag = cand.default_tag;
+
+  header.addEventListener('click', () => {
+    const modal = document.getElementById('workout-add-exercise-modal');
+    modal.querySelectorAll('.substitution-row').forEach(otherRow => {
+      if (otherRow !== row) {
+        const otherExpansion = otherRow.querySelector('div:nth-child(2)');
+        if (otherExpansion) otherExpansion.style.display = 'none';
+      }
+    });
+
+    const isExpanded = expansion.style.display === 'flex';
+    expansion.style.display = isExpanded ? 'none' : 'flex';
+    if (!isExpanded) {
+      updateSliderPosition(expansion, selectedTag);
+    }
+  });
+
+  const sliderButtons = expansion.querySelectorAll('.protocol-btn');
+  sliderButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      selectedTag = btn.getAttribute('data-tag');
+      updateSliderPosition(expansion, selectedTag);
+    });
+  });
+
+  const confirmBtn = expansion.querySelector('.btn-confirm-workout-add-ex');
+  confirmBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+
+    const activeDate = state.activeWorkout.date;
+    const prevStats = getPreviousExerciseStats(cand.name, activeDate);
+    const setsCount = getSetsForTag(selectedTag);
+
+    const data = [];
+    for (let i = 0; i < setsCount; i++) {
+      const defaultRir = isFailureSet(selectedTag, i) ? '0' : '';
+      data.push({
+        weight: prevStats ? prevStats.weight.toString() : '',
+        reps: prevStats ? Math.round(prevStats.reps).toString() : '',
+        rir: defaultRir
+      });
+    }
+
+    const newEx = {
+      name: cand.name,
+      tag: selectedTag,
+      target: cand.muscle_tags || 'Other',
+      sets: setsCount,
+      workoutNote: '',
+      setData: data
+    };
+
+    state.activeWorkout.exercises.push(newEx);
+    saveActiveWorkoutState();
+    renderActiveCard();
+
+    document.getElementById('workout-add-exercise-modal').close();
+  });
+
+  return row;
+}
+
+

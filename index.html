@@ -90,18 +90,13 @@
             Leg Extensions, Seated Curls, Calf Raises
           </p>
           
-          <!-- Dropdown selector for swaps -->
+          <!-- Custom Dropdown selector for swaps -->
           <div class="swap-dropdown-container" id="swap-container">
-            <label for="swap-select">Template Assigned Today:</label>
-            <select id="swap-select" class="dropdown-select">
-              <option value="Monday">Monday (Push)</option>
-              <option value="Tuesday">Tuesday (Legs)</option>
-              <option value="Wednesday">Wednesday (Pull)</option>
-              <option value="Thursday">Thursday (Rest Day)</option>
-              <option value="Friday">Friday (Upper)</option>
-              <option value="Saturday" selected>Saturday (Lower)</option>
-              <option value="Sunday">Sunday (Rest Day)</option>
-            </select>
+            <label>Template Assigned Today:</label>
+            <button type="button" id="swap-select-trigger" class="dropdown-select-trigger" style="width: 100%; text-align: left; background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 12px; padding: 12px; color: var(--text-primary); font-family: inherit; font-size: 13px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box;">
+              <span id="swap-select-current-text">Saturday (Lower)</span>
+              <span style="color: var(--text-muted); font-size: 10px;">▼</span>
+            </button>
             <button id="btn-swap-workout" class="btn btn-secondary" style="margin-top:8px; display:none; padding:10px 14px;">Swap Workout</button>
           </div>
           
@@ -188,11 +183,19 @@
                 <span id="exercise-target" class="muscle-badge">Chest/Shoulders</span>
               </div>
             </div>
-            <button id="btn-swap-exercise" style="background:none; border:none; color:var(--accent-lavender); cursor:pointer; padding:4px; display:flex; align-items:center; justify-content:center; flex-shrink: 0; margin-top: 1px;" title="Swap Exercise">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                <path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z"/>
-              </svg>
-            </button>
+            <div style="display:flex; align-items:center; gap:12px; flex-shrink:0; margin-top:1px;">
+              <button id="btn-swap-exercise" style="background:none; border:none; color:var(--accent-lavender); cursor:pointer; padding:4px; display:flex; align-items:center; justify-content:center;" title="Swap Exercise">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z"/>
+                </svg>
+              </button>
+              <button id="btn-workout-add-exercise" style="background:none; border:none; color:var(--accent-lavender); cursor:pointer; padding:4px; display:flex; align-items:center; justify-content:center;" title="Add Exercise">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+              </button>
+            </div>
           </div>
           
           <!-- Data Input Table -->
@@ -312,8 +315,9 @@
           <!-- Day cards dynamically rendered here -->
         </div>
         
-        <!-- Save Changes Button container -->
-        <div class="glass-card" style="margin-bottom:30px; padding:16px;">
+        <!-- Create Custom Day and Save Changes Buttons -->
+        <div class="glass-card" style="margin-bottom:30px; padding:16px; display:flex; flex-direction:column; gap:12px;">
+          <button id="btn-create-custom-day" class="btn btn-secondary" style="width:100%;">+ Create Custom Day</button>
           <button id="btn-save-split" class="btn" style="width:100%;">Save Split Config</button>
         </div>
       </section>
@@ -723,6 +727,65 @@
           </div>
           <div class="dialog-buttons">
             <button type="button" id="btn-close-analytics-info" class="btn btn-secondary" style="width:100%;">Close</button>
+          </div>
+        </div>
+      </dialog>
+
+      <!-- Workout Add Exercise Modal -->
+      <dialog id="workout-add-exercise-modal" class="history-detail-modal" closedby="any" style="max-width:380px; width:95%;">
+        <form method="dialog" class="dialog-content" onsubmit="event.preventDefault();">
+          <div class="dialog-header" style="display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:16px; font-weight:700; color:var(--accent-lavender);">Add Exercise to Workout</span>
+            <button type="button" id="btn-close-workout-add-modal" style="background:none; border:none; color:var(--text-muted); font-size:24px; cursor:pointer;">&times;</button>
+          </div>
+          
+          <div class="dialog-body" style="display:flex; flex-direction:column; gap:12px; max-height:400px; overflow-y:auto; padding-right:4px;">
+            <!-- Live Search Interface Input -->
+            <input type="text" id="workout-add-search-input" class="form-input" placeholder="Search exercises..." style="width:100%; margin:0; padding:10px; border-radius:10px;">
+            
+            <!-- High-Similarity Matching List Block -->
+            <div id="workout-add-high-similarity-section" style="display:flex; flex-direction:column; gap:6px;">
+              <span style="font-size:11px; font-weight:700; color:var(--accent-mint); text-transform:uppercase; letter-spacing:0.5px;">Recommended Movements</span>
+              <div id="workout-add-high-similarity-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+            </div>
+            
+            <!-- Divider -->
+            <div id="workout-add-alphabetical-divider" style="display:flex; align-items:center; gap:10px; margin:4px 0;">
+              <hr style="flex:1; border:none; border-top:1px solid var(--border-glass);">
+              <span style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px;">All Exercises (A-Z)</span>
+              <hr style="flex:1; border:none; border-top:1px solid var(--border-glass);">
+            </div>
+            
+            <!-- Alphabetical Fallback List Block -->
+            <div id="workout-add-alphabetical-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+          </div>
+        </form>
+      </dialog>
+
+
+
+      <!-- Custom Day Selector Swap Modal -->
+      <dialog id="swap-custom-menu-modal" class="history-detail-modal" closedby="any" style="max-width:350px; width:90%; border: none; background: transparent; padding: 0; outline: none; margin: auto;">
+        <div class="dialog-content" style="background: #000000; border: 1px solid var(--border-glass); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.85);">
+          <div class="dialog-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+            <span style="font-size:15px; font-weight:700; color:var(--text-primary);">Swap Today's Workout</span>
+            <button type="button" id="btn-close-swap-menu-modal" style="background:none; border:none; color:var(--text-muted); font-size:22px; cursor:pointer; line-height: 1;">&times;</button>
+          </div>
+          <div class="dialog-body" id="swap-custom-menu-list" style="display:flex; flex-direction:column; gap:10px; max-height:450px; overflow-y:auto; padding-right:2px;">
+            <!-- Custom capsule pills rendered here -->
+          </div>
+        </div>
+      </dialog>
+
+      <!-- Split Workout Selection Modal -->
+      <dialog id="split-workout-select-modal" class="history-detail-modal" closedby="any" style="max-width:350px; width:90%; border: none; background: transparent; padding: 0; outline: none; margin: auto;">
+        <div class="dialog-content" style="background: #000000; border: 1px solid var(--border-glass); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.85);">
+          <div class="dialog-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
+            <span style="font-size:15px; font-weight:700; color:var(--accent-lavender);">Choose Workout</span>
+            <button type="button" id="btn-close-split-select-modal" style="background:none; border:none; color:var(--text-muted); font-size:22px; cursor:pointer; line-height: 1;">&times;</button>
+          </div>
+          <div class="dialog-body" id="split-workout-options-list" style="display:flex; flex-direction:column; gap:10px; max-height:450px; overflow-y:auto; padding-right:2px;">
+            <!-- Options populated dynamically as custom capsule pills -->
           </div>
         </div>
       </dialog>
