@@ -1942,23 +1942,12 @@ html:active-view-transition-type(backward)::view-transition-new(root) {
 
 /* Redesigned Swap Workout Styles */
 .swap-week-row:hover:not(.disabled) {
-  background: rgba(255, 255, 255, 0.05) !important;
-}
-
-.swap-week-row.selected-target {
-  box-shadow: 0 0 15px rgba(191, 155, 254, 0.25) !important;
-  background: rgba(191, 155, 254, 0.08) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
 }
 
 .swap-custom-pill:hover {
-  background: rgba(255, 255, 255, 0.08) !important;
-  border-color: rgba(255, 255, 255, 0.25) !important;
-}
-
-.swap-custom-pill.selected-target {
-  box-shadow: 0 0 15px rgba(191, 155, 254, 0.25) !important;
-  background: rgba(191, 155, 254, 0.08) !important;
-  border-color: var(--accent-lavender) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
 }
 
 .swap-week-row {

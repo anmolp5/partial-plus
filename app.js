@@ -1177,17 +1177,29 @@ function renderSwapWorkoutModal() {
       row.className = 'swap-week-row';
       row.style.display = 'flex';
       row.style.alignItems = 'center';
-      row.style.padding = '10px 14px';
+      row.style.padding = '6px 12px'; // Decreased padding to reclaim vertical space
       row.style.transition = 'all 0.2s ease';
       row.style.borderRadius = '10px';
-      row.style.margin = '2px 4px';
+      row.style.margin = '1px 4px'; // Decreased margin to reclaim vertical space
+      row.style.border = '1px solid transparent';
       
       if (isToday) {
         row.style.background = 'rgba(191, 155, 254, 0.05)';
         row.style.border = '1px solid rgba(191, 155, 254, 0.2)';
-      } else {
-        row.style.border = '1px solid transparent';
       }
+      
+      // Radio Selector Dot (clean, minimal purple circle selector)
+      const selectDot = document.createElement('div');
+      selectDot.className = 'swap-select-dot';
+      selectDot.style.width = '12px';
+      selectDot.style.height = '12px';
+      selectDot.style.borderRadius = '50%';
+      selectDot.style.border = '2.5px solid rgba(255,255,255,0.2)';
+      selectDot.style.marginRight = '12px';
+      selectDot.style.flexShrink = '0';
+      selectDot.style.boxSizing = 'border-box';
+      selectDot.style.transition = 'all 0.2s ease';
+      selectDot.style.background = 'transparent';
       
       // Day label (left)
       const dayLabelEl = document.createElement('div');
@@ -1201,7 +1213,7 @@ function renderSwapWorkoutModal() {
       // Divider
       const divider = document.createElement('div');
       divider.style.width = '1px';
-      divider.style.height = '20px';
+      divider.style.height = '18px';
       divider.style.background = 'rgba(255,255,255,0.1)';
       divider.style.margin = '0 14px';
       
@@ -1209,8 +1221,8 @@ function renderSwapWorkoutModal() {
       const indicator = document.createElement('div');
       indicator.style.flex = '1.2';
       indicator.style.textAlign = 'center';
-      indicator.style.padding = '8px 12px';
-      indicator.style.borderRadius = '10px';
+      indicator.style.padding = '6px 10px';
+      indicator.style.borderRadius = '8px';
       indicator.style.fontSize = '12px';
       indicator.style.fontWeight = '600';
       indicator.style.transition = 'all 0.2s ease';
@@ -1221,6 +1233,7 @@ function renderSwapWorkoutModal() {
         indicator.style.color = 'var(--text-muted)';
         row.style.opacity = '0.4';
         row.classList.add('disabled');
+        selectDot.style.opacity = '0.3';
       } else {
         if (workoutLabel === 'Rest Day') {
           indicator.style.background = 'rgba(0, 245, 212, 0.05)';
@@ -1240,6 +1253,7 @@ function renderSwapWorkoutModal() {
         }
       }
       
+      row.appendChild(selectDot);
       row.appendChild(dayLabelEl);
       row.appendChild(divider);
       row.appendChild(indicator);
@@ -1247,71 +1261,131 @@ function renderSwapWorkoutModal() {
     });
   }
   
-  // Render Bottom Section (Custom Workouts)
+  // Render Bottom Section (Workouts Consolidated list)
   const customList = document.getElementById('swap-custom-section-list');
   if (customList) {
     customList.innerHTML = '';
     
+    // 1. Custom workouts
     const customTemplates = JSON.parse(localStorage.getItem('custom_day_templates') || '{}');
-    const customNames = Object.keys(customTemplates);
+    const customNames = Object.keys(customTemplates).sort();
     
-    if (customNames.length === 0) {
-      customList.innerHTML = `<div style="text-align:center; padding: 12px; color: var(--text-muted); font-size: 12px; font-style: italic;">No custom templates available.</div>`;
-    } else {
-      customNames.forEach(name => {
-        const pill = document.createElement('button');
-        pill.type = 'button';
-        pill.className = 'swap-custom-pill';
-        pill.style.width = '100%';
-        pill.style.textAlign = 'left';
-        pill.style.background = 'rgba(255,255,255,0.03)';
-        pill.style.border = '1px solid var(--border-glass)';
-        pill.style.borderRadius = '12px';
-        pill.style.padding = '12px 14px';
-        pill.style.color = 'var(--text-primary)';
-        pill.style.fontFamily = 'inherit';
-        pill.style.fontSize = '13px';
-        pill.style.cursor = 'pointer';
-        pill.style.transition = 'all 0.2s ease';
-        pill.style.display = 'flex';
-        pill.style.justifyContent = 'space-between';
-        pill.style.alignItems = 'center';
-        pill.style.boxSizing = 'border-box';
-        
-        pill.innerHTML = `
-          <span style="font-weight:600;">${name}</span>
-          <span style="font-size:11px; color:var(--text-muted);">${customTemplates[name].exercises ? customTemplates[name].exercises.length : 0} ex.</span>
-        `;
-        
-        pill.addEventListener('click', () => {
-          selectSwapTarget({ type: 'custom', value: name }, pill);
-        });
-        
-        customList.appendChild(pill);
+    // 2. Active standard workouts currently in split
+    const activeWeekdayTemplates = new Set();
+    const standardDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    standardDays.forEach(day => {
+      const dayData = config[day];
+      if (dayData) {
+        if (dayData.isRest) {
+          activeWeekdayTemplates.add("Rest Day");
+        } else if (dayData.label) {
+          activeWeekdayTemplates.add(dayData.label);
+        }
+      }
+    });
+    const standardWorkoutNames = Array.from(activeWeekdayTemplates).sort();
+    
+    const renderWorkoutPill = (name, isCustom, exerciseCount, associatedKey) => {
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'swap-custom-pill';
+      pill.style.width = '100%';
+      pill.style.textAlign = 'left';
+      pill.style.background = 'rgba(255,255,255,0.03)';
+      pill.style.border = '1px solid var(--border-glass)';
+      pill.style.borderRadius = '12px';
+      pill.style.padding = '8px 12px'; // Decreased padding to save space
+      pill.style.color = 'var(--text-primary)';
+      pill.style.fontFamily = 'inherit';
+      pill.style.fontSize = '13px';
+      pill.style.cursor = 'pointer';
+      pill.style.transition = 'all 0.2s ease';
+      pill.style.display = 'flex';
+      pill.style.alignItems = 'center';
+      pill.style.boxSizing = 'border-box';
+      pill.style.margin = '2px 0';
+      
+      // Radio Selector Dot (clean, minimal purple circle selector)
+      const selectDot = document.createElement('div');
+      selectDot.className = 'swap-select-dot';
+      selectDot.style.width = '12px';
+      selectDot.style.height = '12px';
+      selectDot.style.borderRadius = '50%';
+      selectDot.style.border = '2.5px solid rgba(255,255,255,0.2)';
+      selectDot.style.marginRight = '12px';
+      selectDot.style.flexShrink = '0';
+      selectDot.style.boxSizing = 'border-box';
+      selectDot.style.transition = 'all 0.2s ease';
+      selectDot.style.background = 'transparent';
+      
+      const labelText = document.createElement('div');
+      labelText.style.flex = '1';
+      labelText.style.display = 'flex';
+      labelText.style.justifyContent = 'space-between';
+      labelText.style.alignItems = 'center';
+      labelText.innerHTML = `
+        <span style="font-weight:600;">${name}</span>
+        <span style="font-size:10px; color:var(--text-muted); font-weight: 500;">
+          ${isCustom ? '<span style="color:var(--accent-lavender); font-weight:700; margin-right:4px;">CUSTOM</span>' : ''}${exerciseCount} ex.
+        </span>
+      `;
+      
+      pill.appendChild(selectDot);
+      pill.appendChild(labelText);
+      
+      pill.addEventListener('click', () => {
+        selectSwapTarget({ type: 'custom', value: associatedKey }, pill);
       });
-    }
+      
+      customList.appendChild(pill);
+    };
+
+    // Render Custom Workouts at the top
+    customNames.forEach(name => {
+      const exCount = customTemplates[name].exercises ? customTemplates[name].exercises.length : 0;
+      renderWorkoutPill(name, true, exCount, name);
+    });
+
+    // Render Standard Workouts active in split underneath
+    standardWorkoutNames.forEach(name => {
+      let exCount = 0;
+      let associatedKey = '';
+      if (name === "Rest Day") {
+        exCount = 0;
+        associatedKey = "Thursday"; // Map Rest Day to Thursday config
+      } else {
+        // Find standard day with this label to get exercise count and key
+        const foundDay = standardDays.find(day => config[day] && config[day].label === name);
+        if (foundDay) {
+          associatedKey = foundDay;
+          if (config[foundDay].exercises) {
+            exCount = config[foundDay].exercises.length;
+          }
+        }
+      }
+      if (associatedKey) {
+        renderWorkoutPill(name, false, exCount, associatedKey);
+      }
+    });
   }
 }
 
 function selectSwapTarget(target, element) {
   selectedSwapTarget = target;
   
-  // Clear other selections
-  document.querySelectorAll('.swap-week-row, .swap-custom-pill').forEach(el => {
-    el.classList.remove('selected-target');
-    el.style.borderColor = '';
-    if (el.classList.contains('swap-week-row')) {
-      el.style.background = el.style.border.includes('rgba(191, 155, 254') ? 'rgba(191, 155, 254, 0.05)' : 'transparent';
-    } else {
-      el.style.background = 'rgba(255,255,255,0.03)';
-    }
+  // Clear other selector dots (leaving backgrounds/borders/halos clean and unchanged)
+  document.querySelectorAll('.swap-select-dot').forEach(dot => {
+    dot.style.background = 'transparent';
+    dot.style.borderColor = 'rgba(255,255,255,0.2)';
   });
   
-  // Apply highlight to selection
+  // Apply clean purple circle selection indicator to target element's dot
   if (element) {
-    element.classList.add('selected-target');
-    element.style.borderColor = 'var(--accent-lavender)';
-    element.style.background = 'rgba(191, 155, 254, 0.08)';
+    const dot = element.querySelector('.swap-select-dot');
+    if (dot) {
+      dot.style.background = 'var(--accent-lavender)';
+      dot.style.borderColor = 'var(--accent-lavender)';
+    }
   }
   
   const executeBtn = document.getElementById('btn-execute-swap');
@@ -1414,13 +1488,11 @@ async function executeSwapAction() {
   
   showModalSwapBanner("Swap completed!", false);
   
-  setTimeout(() => {
-    const modal = document.getElementById('swap-custom-menu-modal');
-    if (modal) modal.close();
-    executeBtn.disabled = false;
-    executeBtn.innerHTML = originalHtml;
-    selectedSwapTarget = null;
-  }, 1000);
+  // Instantly re-render the modal card to validate new states without auto-closing!
+  renderSwapWorkoutModal();
+  
+  executeBtn.disabled = false;
+  executeBtn.innerHTML = originalHtml;
 }
 
 function showModalSwapBanner(message, isError) {
