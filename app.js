@@ -1188,26 +1188,13 @@ function renderSwapWorkoutModal() {
         row.style.border = '1px solid rgba(191, 155, 254, 0.2)';
       }
       
-      // Radio Selector Dot (clean, minimal purple circle selector)
-      const selectDot = document.createElement('div');
-      selectDot.className = 'swap-select-dot';
-      selectDot.style.width = '12px';
-      selectDot.style.height = '12px';
-      selectDot.style.borderRadius = '50%';
-      selectDot.style.border = '2.5px solid rgba(255,255,255,0.2)';
-      selectDot.style.marginRight = '12px';
-      selectDot.style.flexShrink = '0';
-      selectDot.style.boxSizing = 'border-box';
-      selectDot.style.transition = 'all 0.2s ease';
-      selectDot.style.background = 'transparent';
-      
       // Day label (left)
       const dayLabelEl = document.createElement('div');
       dayLabelEl.style.flex = '1';
       dayLabelEl.style.textAlign = 'left';
       dayLabelEl.style.fontSize = '13px';
       dayLabelEl.style.fontWeight = '600';
-      dayLabelEl.innerHTML = `${dayName} ${isToday ? '<span style="font-size:10px; color:var(--accent-lavender); margin-left:4px; font-weight:700;">TODAY</span>' : ''}`;
+      dayLabelEl.textContent = dayName;
       dayLabelEl.style.color = isToday ? 'var(--accent-lavender)' : 'var(--text-primary)';
       
       // Divider
@@ -1233,7 +1220,6 @@ function renderSwapWorkoutModal() {
         indicator.style.color = 'var(--text-muted)';
         row.style.opacity = '0.4';
         row.classList.add('disabled');
-        selectDot.style.opacity = '0.3';
       } else {
         if (workoutLabel === 'Rest Day') {
           indicator.style.background = 'rgba(0, 245, 212, 0.05)';
@@ -1253,7 +1239,6 @@ function renderSwapWorkoutModal() {
         }
       }
       
-      row.appendChild(selectDot);
       row.appendChild(dayLabelEl);
       row.appendChild(divider);
       row.appendChild(indicator);
@@ -1305,19 +1290,6 @@ function renderSwapWorkoutModal() {
       pill.style.boxSizing = 'border-box';
       pill.style.margin = '2px 0';
       
-      // Radio Selector Dot (clean, minimal purple circle selector)
-      const selectDot = document.createElement('div');
-      selectDot.className = 'swap-select-dot';
-      selectDot.style.width = '12px';
-      selectDot.style.height = '12px';
-      selectDot.style.borderRadius = '50%';
-      selectDot.style.border = '2.5px solid rgba(255,255,255,0.2)';
-      selectDot.style.marginRight = '12px';
-      selectDot.style.flexShrink = '0';
-      selectDot.style.boxSizing = 'border-box';
-      selectDot.style.transition = 'all 0.2s ease';
-      selectDot.style.background = 'transparent';
-      
       const labelText = document.createElement('div');
       labelText.style.flex = '1';
       labelText.style.display = 'flex';
@@ -1330,7 +1302,6 @@ function renderSwapWorkoutModal() {
         </span>
       `;
       
-      pill.appendChild(selectDot);
       pill.appendChild(labelText);
       
       pill.addEventListener('click', () => {
@@ -1373,19 +1344,17 @@ function renderSwapWorkoutModal() {
 function selectSwapTarget(target, element) {
   selectedSwapTarget = target;
   
-  // Clear other selector dots (leaving backgrounds/borders/halos clean and unchanged)
-  document.querySelectorAll('.swap-select-dot').forEach(dot => {
-    dot.style.background = 'transparent';
-    dot.style.borderColor = 'rgba(255,255,255,0.2)';
+  // Clear other selections (reset borders: transparent for standard week rows, glass for custom workouts)
+  document.querySelectorAll('.swap-week-row').forEach(el => {
+    el.style.borderColor = 'transparent';
+  });
+  document.querySelectorAll('.swap-custom-pill').forEach(el => {
+    el.style.borderColor = 'var(--border-glass)';
   });
   
-  // Apply clean purple circle selection indicator to target element's dot
+  // Apply clean purple outline to selected element only
   if (element) {
-    const dot = element.querySelector('.swap-select-dot');
-    if (dot) {
-      dot.style.background = 'var(--accent-lavender)';
-      dot.style.borderColor = 'var(--accent-lavender)';
-    }
+    element.style.borderColor = 'var(--accent-lavender)';
   }
   
   const executeBtn = document.getElementById('btn-execute-swap');
@@ -3456,6 +3425,21 @@ function autoLogPastRestDays() {
     localStorage.setItem(KEYS.HISTORY, JSON.stringify(history));
     transmitWebhookLog(fixedRecord).catch(err => console.error("Sheets rest day sync error", err));
     console.log("Logged missing Rest Day on Saturday, June 27, 2026.");
+  }
+
+  // One-time fix for Tuesday, June 30, 2026 Rest Day logging
+  if (!history['2026-06-30']) {
+    const fixedRecord = {
+      date: '2026-06-30',
+      dayLabel: 'Rest Day',
+      templateDay: '',
+      elapsedTime: '00:00',
+      exercises: []
+    };
+    history['2026-06-30'] = fixedRecord;
+    localStorage.setItem(KEYS.HISTORY, JSON.stringify(history));
+    transmitWebhookLog(fixedRecord).catch(err => console.error("Sheets rest day sync error", err));
+    console.log("Logged missing Rest Day on Tuesday, June 30, 2026.");
   }
   
   const startStr = "2026-06-01";

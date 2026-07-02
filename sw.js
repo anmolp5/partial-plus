@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aplift-v56';
+const CACHE_NAME = 'aplift-v57';
 const ASSETS = [
   './',
   './index.html',
