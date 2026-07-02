@@ -222,6 +222,15 @@ function getExpandedRoutineConfig() {
   if (!config) return config;
   
   const expanded = JSON.parse(JSON.stringify(config));
+  
+  // Merge custom day templates
+  const customTemplates = JSON.parse(localStorage.getItem('custom_day_templates') || '{}');
+  for (const name in customTemplates) {
+    if (!expanded[name]) {
+      expanded[name] = JSON.parse(JSON.stringify(customTemplates[name]));
+    }
+  }
+  
   let modified = false;
   
   for (const day in expanded) {
@@ -626,8 +635,7 @@ function setupEventListeners() {
   const swapTrigger = document.getElementById('swap-select-trigger');
   if (swapTrigger) {
     swapTrigger.addEventListener('click', () => {
-      const modal = document.getElementById('swap-custom-menu-modal');
-      if (modal) modal.showModal();
+      openSwapWorkoutModal();
     });
   }
 
@@ -642,9 +650,12 @@ function setupEventListeners() {
   if (swapModal) enableLightDismiss(swapModal);
 
   // Swap Button Action
-  document.getElementById('btn-swap-workout').addEventListener('click', () => {
-    handleSwapButtonClick();
-  });
+  const btnExecuteSwap = document.getElementById('btn-execute-swap');
+  if (btnExecuteSwap) {
+    btnExecuteSwap.addEventListener('click', () => {
+      executeSwapAction();
+    });
+  }
 
   // Card view navigator
   document.getElementById('btn-prev-exercise').addEventListener('click', () => {
@@ -990,65 +1001,440 @@ function renderTodayRoutineDetails(dateStr) {
   const triggerText = currentTemplateInfo.isRest ? `${todayDayName} (Rest Day)` : `${todayDayName} (${currentTemplateInfo.label})`;
   const triggerTextEl = document.getElementById('swap-select-current-text');
   if (triggerTextEl) triggerTextEl.textContent = triggerText;
+}
 
-  // Populate Custom Selector menu overlay
-  const menuList = document.getElementById('swap-custom-menu-list');
-  if (menuList) {
-    menuList.innerHTML = '';
-    
-    const weekId = getWeekMonday(dateStr);
-    const weekDays = getWeekDaysList(weekId);
-    
-    const completedTemplates = new Set();
-    weekDays.forEach(wd => {
-      const log = state.history[wd.dateStr];
-      if (log && log.templateDay) {
-        completedTemplates.add(log.templateDay);
-      }
-    });
+// -------------------------------------------------------------
+// Redesigned Swap Workout Engine
+// -------------------------------------------------------------
+let selectedSwapTarget = null;
 
-    const dayNamesOrder = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-    dayNamesOrder.forEach(dayName => {
-      const assignedTemplate = getTemplateDayForWeekday(dayName, weekId);
-      const info = config[assignedTemplate];
-      
-      const pill = document.createElement('button');
-      pill.type = 'button';
-      pill.className = 'swap-capsule-pill';
-      
-      const label = info.isRest ? `${dayName} (Rest Day)` : `${dayName} (${info.label})`;
-      pill.textContent = label;
-
-      if (assignedTemplate === templateDay) {
-        pill.classList.add('active');
-      } else {
-        pill.classList.add('inactive');
-      }
-
-      const todayInfo = config[templateDay];
-      if (completedTemplates.has(assignedTemplate) && 
-          assignedTemplate !== templateDay && 
-          !info.isRest && 
-          (!todayInfo || !todayInfo.isRest)) {
-        pill.classList.add('disabled');
-      }
-
-      pill.addEventListener('click', () => {
-        selectedSwapTargetDay = dayName;
-        if (triggerTextEl) triggerTextEl.textContent = label;
-        
-        const swapBtn = document.getElementById('btn-swap-workout');
-        if (assignedTemplate !== templateDay) {
-          if (swapBtn) swapBtn.style.display = 'block';
-        } else {
-          if (swapBtn) swapBtn.style.display = 'none';
+async function openSwapWorkoutModal() {
+  const modal = document.getElementById('swap-custom-menu-modal');
+  if (!modal) return;
+  
+  selectedSwapTarget = null;
+  renderSwapWorkoutModal();
+  modal.showModal();
+  
+  // Background dynamic history sync fetch from Sheets
+  const webhookUrl = getWebhookUrl();
+  if (webhookUrl && !webhookUrl.includes('YOUR_APPS_SCRIPT_ID') && state.auth.mode === 'user') {
+    try {
+      console.log("Swap Menu: Fetching latest history from Google Sheets for dynamic sync...");
+      const response = await fetch(webhookUrl);
+      if (response.ok) {
+        const result = await response.json();
+        let workoutRows = [];
+        if (Array.isArray(result)) {
+          workoutRows = result;
+        } else if (result && typeof result === 'object') {
+          workoutRows = result.workouts || [];
         }
         
-        document.getElementById('swap-custom-menu-modal').close();
-      });
+        if (workoutRows.length > 0) {
+          updateHistoryFromRows(workoutRows);
+          renderSwapWorkoutModal();
+        }
+      }
+    } catch (err) {
+      console.warn("Swap Menu: Background history sync failed", err);
+    }
+  }
+}
 
-      menuList.appendChild(pill);
+function updateHistoryFromRows(workoutRows) {
+  const reconstructed = {};
+  workoutRows.forEach(row => {
+    const dateVal = getRowValue(row, ['date']);
+    const dayLabel = getRowValue(row, ['day_label', 'dayLabel', 'day']) || '';
+    const exerciseName = getRowValue(row, ['exercise_name', 'exerciseName', 'exercise']) || '';
+    const setNumber = getRowValue(row, ['set_number', 'setNumber', 'set']) || '';
+    const tag = getRowValue(row, ['tag']) || '';
+    const weight = getRowValue(row, ['weight']) || '0';
+    const reps = getRowValue(row, ['reps']) || '0';
+    const rir = getRowValue(row, ['rir']) || '0';
+    const workoutNote = getRowValue(row, ['workout_note', 'workoutNote', 'note']) || '';
+    let elapsedTime = getRowValue(row, ['workout_time', 'workoutTime', 'elapsed_time', 'elapsedTime', 'time']) || '00:00';
+    
+    if (dayLabel === 'Test Connection' || !dateVal || dateVal === 'undefined') return;
+    
+    let parsedDate = dateVal;
+    if (typeof parsedDate === 'string' && parsedDate.includes('T')) {
+      parsedDate = parsedDate.split('T')[0];
+    }
+    const d = new Date(parsedDate + 'T00:00:00');
+    if (isNaN(d.getTime())) return;
+    
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const date = `${year}-${month}-${day}`;
+    
+    if (!reconstructed[date]) {
+      reconstructed[date] = {
+        date: date,
+        dayLabel: dayLabel,
+        templateDay: '',
+        elapsedTime: elapsedTime,
+        workoutNote: '',
+        exercises: []
+      };
+    }
+    
+    if (exerciseName === 'Rest Day' && !setNumber) {
+      return;
+    }
+    
+    let ex = reconstructed[date].exercises.find(e => e.name === exerciseName);
+    if (!ex) {
+      ex = {
+        name: exerciseName,
+        tag: tag,
+        target: '',
+        workoutNote: '',
+        setData: []
+      };
+      reconstructed[date].exercises.push(ex);
+    }
+    
+    if (workoutNote && parseInt(setNumber) === 1) {
+      ex.workoutNote = workoutNote;
+    }
+    
+    const setIndex = parseInt(setNumber) - 1;
+    if (!isNaN(setIndex) && setIndex >= 0) {
+      ex.setData[setIndex] = {
+        weight: weight,
+        reps: reps,
+        rir: rir
+      };
+    }
+  });
+  
+  for (const date in reconstructed) {
+    try {
+      const parts = date.split('-');
+      if (parts.length !== 3) continue;
+      
+      reconstructed[date].exercises.forEach(ex => {
+        ex.setData = ex.setData.filter(s => s !== undefined);
+      });
+      
+      const d = new Date(parts[0], parts[1] - 1, parts[2]);
+      if (isNaN(d.getTime())) continue;
+      
+      const dayOfWeek = WEEKDAYS[d.getDay()];
+      const weekMonday = getWeekMonday(date);
+      reconstructed[date].templateDay = getTemplateDayForWeekday(dayOfWeek, weekMonday);
+      
+      state.history[date] = reconstructed[date];
+    } catch (e) {
+      console.warn("Error parsing row for date " + date, e);
+    }
+  }
+  
+  syncLocalRestDaysWithSheet(workoutRows);
+  autoLogPastRestDays();
+  localStorage.setItem(KEYS.HISTORY, JSON.stringify(state.history));
+  renderCalendar();
+}
+
+function renderSwapWorkoutModal() {
+  const todayStr = getLocalDateString();
+  const dateObj = new Date(todayStr + 'T00:00:00');
+  const todayDayName = WEEKDAYS[dateObj.getDay()];
+  const weekId = getWeekMonday(todayStr);
+  
+  const config = getExpandedRoutineConfig();
+  const weekDays = getWeekDaysList(weekId);
+  
+  selectedSwapTarget = null;
+  const executeBtn = document.getElementById('btn-execute-swap');
+  if (executeBtn) executeBtn.setAttribute('disabled', 'true');
+  
+  // Render Top Section (Standard Week)
+  const weekDaysContainer = document.getElementById('swap-week-days-list');
+  if (weekDaysContainer) {
+    weekDaysContainer.innerHTML = '';
+    
+    weekDays.forEach(wd => {
+      const dayName = wd.dayName;
+      const dateStr = wd.dateStr;
+      const assignedTemplate = getTemplateDayForWeekday(dayName, weekId);
+      
+      const isToday = (dateStr === todayStr);
+      const isCompleted = !!state.history[dateStr];
+      
+      let workoutLabel = '';
+      if (isCompleted) {
+        workoutLabel = state.history[dateStr].dayLabel;
+      } else {
+        const routine = config[assignedTemplate];
+        workoutLabel = (routine && routine.isRest) ? 'Rest Day' : (routine ? routine.label : assignedTemplate);
+      }
+      
+      const row = document.createElement('div');
+      row.className = 'swap-week-row';
+      row.style.display = 'flex';
+      row.style.alignItems = 'center';
+      row.style.padding = '10px 14px';
+      row.style.transition = 'all 0.2s ease';
+      row.style.borderRadius = '10px';
+      row.style.margin = '2px 4px';
+      
+      if (isToday) {
+        row.style.background = 'rgba(191, 155, 254, 0.05)';
+        row.style.border = '1px solid rgba(191, 155, 254, 0.2)';
+      } else {
+        row.style.border = '1px solid transparent';
+      }
+      
+      // Day label (left)
+      const dayLabelEl = document.createElement('div');
+      dayLabelEl.style.flex = '1';
+      dayLabelEl.style.textAlign = 'left';
+      dayLabelEl.style.fontSize = '13px';
+      dayLabelEl.style.fontWeight = '600';
+      dayLabelEl.innerHTML = `${dayName} ${isToday ? '<span style="font-size:10px; color:var(--accent-lavender); margin-left:4px; font-weight:700;">TODAY</span>' : ''}`;
+      dayLabelEl.style.color = isToday ? 'var(--accent-lavender)' : 'var(--text-primary)';
+      
+      // Divider
+      const divider = document.createElement('div');
+      divider.style.width = '1px';
+      divider.style.height = '20px';
+      divider.style.background = 'rgba(255,255,255,0.1)';
+      divider.style.margin = '0 14px';
+      
+      // Workout indicator card (right)
+      const indicator = document.createElement('div');
+      indicator.style.flex = '1.2';
+      indicator.style.textAlign = 'center';
+      indicator.style.padding = '8px 12px';
+      indicator.style.borderRadius = '10px';
+      indicator.style.fontSize = '12px';
+      indicator.style.fontWeight = '600';
+      indicator.style.transition = 'all 0.2s ease';
+      indicator.textContent = workoutLabel;
+      
+      if (isCompleted) {
+        indicator.style.background = 'rgba(255,255,255,0.03)';
+        indicator.style.color = 'var(--text-muted)';
+        row.style.opacity = '0.4';
+        row.classList.add('disabled');
+      } else {
+        if (workoutLabel === 'Rest Day') {
+          indicator.style.background = 'rgba(0, 245, 212, 0.05)';
+          indicator.style.color = 'var(--accent-mint)';
+          indicator.style.border = '1px solid rgba(0, 245, 212, 0.15)';
+        } else {
+          indicator.style.background = 'rgba(191, 155, 254, 0.08)';
+          indicator.style.color = 'var(--accent-lavender)';
+          indicator.style.border = '1px solid rgba(191, 155, 254, 0.2)';
+        }
+        
+        if (!isToday) {
+          row.style.cursor = 'pointer';
+          row.addEventListener('click', () => {
+            selectSwapTarget({ type: 'day', value: dayName }, row);
+          });
+        }
+      }
+      
+      row.appendChild(dayLabelEl);
+      row.appendChild(divider);
+      row.appendChild(indicator);
+      weekDaysContainer.appendChild(row);
     });
+  }
+  
+  // Render Bottom Section (Custom Workouts)
+  const customList = document.getElementById('swap-custom-section-list');
+  if (customList) {
+    customList.innerHTML = '';
+    
+    const customTemplates = JSON.parse(localStorage.getItem('custom_day_templates') || '{}');
+    const customNames = Object.keys(customTemplates);
+    
+    if (customNames.length === 0) {
+      customList.innerHTML = `<div style="text-align:center; padding: 12px; color: var(--text-muted); font-size: 12px; font-style: italic;">No custom templates available.</div>`;
+    } else {
+      customNames.forEach(name => {
+        const pill = document.createElement('button');
+        pill.type = 'button';
+        pill.className = 'swap-custom-pill';
+        pill.style.width = '100%';
+        pill.style.textAlign = 'left';
+        pill.style.background = 'rgba(255,255,255,0.03)';
+        pill.style.border = '1px solid var(--border-glass)';
+        pill.style.borderRadius = '12px';
+        pill.style.padding = '12px 14px';
+        pill.style.color = 'var(--text-primary)';
+        pill.style.fontFamily = 'inherit';
+        pill.style.fontSize = '13px';
+        pill.style.cursor = 'pointer';
+        pill.style.transition = 'all 0.2s ease';
+        pill.style.display = 'flex';
+        pill.style.justifyContent = 'space-between';
+        pill.style.alignItems = 'center';
+        pill.style.boxSizing = 'border-box';
+        
+        pill.innerHTML = `
+          <span style="font-weight:600;">${name}</span>
+          <span style="font-size:11px; color:var(--text-muted);">${customTemplates[name].exercises ? customTemplates[name].exercises.length : 0} ex.</span>
+        `;
+        
+        pill.addEventListener('click', () => {
+          selectSwapTarget({ type: 'custom', value: name }, pill);
+        });
+        
+        customList.appendChild(pill);
+      });
+    }
+  }
+}
+
+function selectSwapTarget(target, element) {
+  selectedSwapTarget = target;
+  
+  // Clear other selections
+  document.querySelectorAll('.swap-week-row, .swap-custom-pill').forEach(el => {
+    el.classList.remove('selected-target');
+    el.style.borderColor = '';
+    if (el.classList.contains('swap-week-row')) {
+      el.style.background = el.style.border.includes('rgba(191, 155, 254') ? 'rgba(191, 155, 254, 0.05)' : 'transparent';
+    } else {
+      el.style.background = 'rgba(255,255,255,0.03)';
+    }
+  });
+  
+  // Apply highlight to selection
+  if (element) {
+    element.classList.add('selected-target');
+    element.style.borderColor = 'var(--accent-lavender)';
+    element.style.background = 'rgba(191, 155, 254, 0.08)';
+  }
+  
+  const executeBtn = document.getElementById('btn-execute-swap');
+  if (executeBtn) {
+    executeBtn.removeAttribute('disabled');
+  }
+}
+
+async function executeSwapAction() {
+  if (!selectedSwapTarget) return;
+  
+  const executeBtn = document.getElementById('btn-execute-swap');
+  if (!executeBtn) return;
+  
+  executeBtn.disabled = true;
+  const originalHtml = executeBtn.innerHTML;
+  executeBtn.innerHTML = `<span class="spinner-icon">⏳</span> Swapping...`;
+  
+  await new Promise(resolve => setTimeout(resolve, 600));
+  
+  const todayStr = getLocalDateString();
+  const dateObj = new Date(todayStr + 'T00:00:00');
+  const todayDayName = WEEKDAYS[dateObj.getDay()];
+  const weekId = getWeekMonday(todayStr);
+  const currentTemplate = getAssignedTemplateDay(todayStr);
+  
+  if (state.history[todayStr]) {
+    showModalSwapBanner("Swap invalid: Today's workout has already been completed.", true);
+    executeBtn.disabled = false;
+    executeBtn.innerHTML = originalHtml;
+    return;
+  }
+  
+  if (selectedSwapTarget.type === 'day') {
+    const targetDay = selectedSwapTarget.value;
+    const selectedTemplate = getTemplateDayForWeekday(targetDay, weekId);
+    
+    if (selectedTemplate === currentTemplate) {
+      showModalSwapBanner("Swap invalid: Today is already assigned to this template.", true);
+      executeBtn.disabled = false;
+      executeBtn.innerHTML = originalHtml;
+      return;
+    }
+    
+    if (!state.weekSwaps[weekId]) {
+      state.weekSwaps[weekId] = {
+        "Monday": "Monday",
+        "Tuesday": "Tuesday",
+        "Wednesday": "Wednesday",
+        "Thursday": "Thursday",
+        "Friday": "Friday",
+        "Saturday": "Saturday",
+        "Sunday": "Sunday"
+      };
+    }
+    
+    // Trade (reciprocal swap)
+    const currentSwaps = state.weekSwaps[weekId];
+    const temp = currentSwaps[todayDayName];
+    currentSwaps[todayDayName] = currentSwaps[targetDay];
+    currentSwaps[targetDay] = temp;
+    
+    if (state.auth.mode === 'user') {
+      localStorage.setItem(KEYS.WEEK_SWAPS, JSON.stringify(state.weekSwaps));
+    }
+    
+  } else if (selectedSwapTarget.type === 'custom') {
+    const customTemplateName = selectedSwapTarget.value;
+    
+    if (customTemplateName === currentTemplate) {
+      showModalSwapBanner("Swap invalid: Today is already assigned to this template.", true);
+      executeBtn.disabled = false;
+      executeBtn.innerHTML = originalHtml;
+      return;
+    }
+    
+    if (!state.weekSwaps[weekId]) {
+      state.weekSwaps[weekId] = {
+        "Monday": "Monday",
+        "Tuesday": "Tuesday",
+        "Wednesday": "Wednesday",
+        "Thursday": "Thursday",
+        "Friday": "Friday",
+        "Saturday": "Saturday",
+        "Sunday": "Sunday"
+      };
+    }
+    
+    // Overwrite
+    const currentSwaps = state.weekSwaps[weekId];
+    currentSwaps[todayDayName] = customTemplateName;
+    
+    if (state.auth.mode === 'user') {
+      localStorage.setItem(KEYS.WEEK_SWAPS, JSON.stringify(state.weekSwaps));
+    }
+  }
+  
+  renderTodayRoutineDetails(todayStr);
+  renderCalendar();
+  
+  showModalSwapBanner("Swap completed!", false);
+  
+  setTimeout(() => {
+    const modal = document.getElementById('swap-custom-menu-modal');
+    if (modal) modal.close();
+    executeBtn.disabled = false;
+    executeBtn.innerHTML = originalHtml;
+    selectedSwapTarget = null;
+  }, 1000);
+}
+
+function showModalSwapBanner(message, isError) {
+  const banner = document.getElementById('swap-modal-status-banner');
+  if (banner) {
+    banner.textContent = message;
+    banner.style.background = isError ? 'rgba(255, 95, 85, 0.15)' : 'rgba(0, 245, 212, 0.15)';
+    banner.style.color = isError ? 'var(--accent-red)' : 'var(--accent-mint)';
+    banner.style.border = `1px solid ${isError ? 'rgba(255, 95, 85, 0.25)' : 'rgba(0, 245, 212, 0.25)'}`;
+    banner.style.display = 'block';
+    
+    setTimeout(() => {
+      banner.style.display = 'none';
+    }, 3000);
   }
 }
 
@@ -1065,119 +1451,6 @@ function getWeekDaysList(mondayStr) {
     });
   }
   return list;
-}
-
-// Dynamic Reciprocal Swap Handler
-async function handleSwapButtonClick() {
-  if (!selectedSwapTargetDay) return;
-  const swapBtn = document.getElementById('btn-swap-workout');
-  
-  // 1. Show loading state
-  swapBtn.disabled = true;
-  const originalHtml = swapBtn.innerHTML;
-  swapBtn.innerHTML = `<span class="spinner-icon">⏳</span> Swapping...`;
-  
-  // Simulated delay for loading presentation
-  await new Promise(resolve => setTimeout(resolve, 600));
-  
-  // 2. Validate swap
-  const todayStr = getLocalDateString();
-  const dateObj = new Date(todayStr + 'T00:00:00');
-  const todayDayName = WEEKDAYS[dateObj.getDay()];
-  const weekId = getWeekMonday(todayStr);
-  const currentTemplate = getAssignedTemplateDay(todayStr);
-  
-  // Check if today's workout was already logged in history
-  if (state.history[todayStr]) {
-    showSwapBanner("Swap invalid: Today's workout has already been completed.", true);
-    swapBtn.disabled = false;
-    swapBtn.innerHTML = originalHtml;
-    return;
-  }
-  
-  const config = getExpandedRoutineConfig();
-  const selectedTemplate = getTemplateDayForWeekday(selectedSwapTargetDay, weekId);
-  
-  // Check if same template
-  if (selectedTemplate === currentTemplate) {
-    showSwapBanner("Swap invalid: Today is already assigned to this template.", true);
-    swapBtn.disabled = false;
-    swapBtn.innerHTML = originalHtml;
-    return;
-  }
-  
-  // Check if selected template was already completed this week on another day
-  const weekDays = getWeekDaysList(weekId);
-  const completedTemplates = new Set();
-  weekDays.forEach(wd => {
-    const log = state.history[wd.dateStr];
-    if (log && log.templateDay) {
-      completedTemplates.add(log.templateDay);
-    }
-  });
-  const currentTemplateInfo = config[currentTemplate];
-  const selectedTemplateInfo = config[selectedTemplate];
-  if (completedTemplates.has(selectedTemplate) && 
-      !selectedTemplateInfo.isRest && 
-      (!currentTemplateInfo || !currentTemplateInfo.isRest)) {
-    showSwapBanner("Swap invalid: This template has already been completed this week.", true);
-    swapBtn.disabled = false;
-    swapBtn.innerHTML = originalHtml;
-    return;
-  }
-  
-  // 3. Perform reciprocal swap
-  executeSwap(todayDayName, selectedSwapTargetDay, weekId);
-  
-  // 4. Success banner and hide button
-  showSwapBanner("Swap completed!", false);
-  swapBtn.disabled = false;
-  swapBtn.innerHTML = originalHtml;
-  swapBtn.style.display = 'none';
-}
-
-function showSwapBanner(message, isError) {
-  const banner = document.getElementById('swap-status-banner');
-  if (banner) {
-    banner.textContent = message;
-    banner.className = `status-banner ${isError ? 'error' : 'success'}`;
-    banner.style.display = 'block';
-    
-    if (window.swapBannerTimeout) clearTimeout(window.swapBannerTimeout);
-    
-    window.swapBannerTimeout = setTimeout(() => {
-      banner.style.display = 'none';
-    }, 4000);
-  }
-}
-
-function executeSwap(sourceDay, targetDay, weekId) {
-  if (!state.weekSwaps[weekId]) {
-    state.weekSwaps[weekId] = {
-      "Monday": "Monday",
-      "Tuesday": "Tuesday",
-      "Wednesday": "Wednesday",
-      "Thursday": "Thursday",
-      "Friday": "Friday",
-      "Saturday": "Saturday",
-      "Sunday": "Sunday"
-    };
-  }
-
-  const currentSwaps = state.weekSwaps[weekId];
-
-  // Perform reciprocal swap of the slots
-  const temp = currentSwaps[sourceDay];
-  currentSwaps[sourceDay] = currentSwaps[targetDay];
-  currentSwaps[targetDay] = temp;
-  
-  if (state.auth.mode === 'user') {
-    localStorage.setItem(KEYS.WEEK_SWAPS, JSON.stringify(state.weekSwaps));
-  }
-  
-  const todayStr = getLocalDateString();
-  renderTodayRoutineDetails(todayStr);
-  renderCalendar();
 }
 
 // -------------------------------------------------------------
@@ -1948,40 +2221,52 @@ async function transmitWebhookLog(record) {
     return;
   }
 
+  let transactionLogsPayload = [];
   if (!record.exercises || record.exercises.length === 0) {
-    return; // Do not log rest days to the Google Sheet
-  }
+    transactionLogsPayload.push({
+      date: record.date,
+      day_label: record.dayLabel || 'Rest Day',
+      elapsed_time: record.elapsedTime || '00:00',
+      exercise_name: 'Rest Day',
+      set_number: '',
+      tag: '',
+      weight: '',
+      reps: '',
+      rir: '',
+      workout_note: record.workoutNote || ""
+    });
+  } else {
+    // Format flattened rows for App Script consumption
+    const logsMatrix = [];
+    record.exercises.forEach(ex => {
+      ex.setData.forEach((set, i) => {
+        logsMatrix.push({
+          exercise_name: ex.name,
+          set_number: i + 1,
+          tag: ex.tag,
+          weight: set.weight,
+          reps: set.reps,
+          rir: set.rir,
+          workout_note: ex.workoutNote || ""
+        });
+      });
+    });
 
-  // Format flattened rows for App Script consumption
-  const logsMatrix = [];
-  record.exercises.forEach(ex => {
-    ex.setData.forEach((set, i) => {
-      logsMatrix.push({
-        exercise_name: ex.name,
-        set_number: i + 1,
-        tag: ex.tag,
+    transactionLogsPayload = logsMatrix.map((set, index) => {
+      return {
+        date: record.date,
+        day_label: record.dayLabel,
+        elapsed_time: record.elapsedTime,
+        exercise_name: set.exercise_name,
+        set_number: set.set_number,
+        tag: set.tag,
         weight: set.weight,
         reps: set.reps,
         rir: set.rir,
-        workout_note: ex.workoutNote || ""
-      });
+        workout_note: (set.set_number === 1) ? (set.workout_note || "") : ""
+      };
     });
-  });
-
-  const transactionLogsPayload = logsMatrix.map((set, index) => {
-    return {
-      date: record.date,
-      day_label: record.dayLabel,
-      elapsed_time: record.elapsedTime,
-      exercise_name: set.exercise_name,
-      set_number: set.set_number,
-      tag: set.tag,
-      weight: set.weight,
-      reps: set.reps,
-      rir: set.rir,
-      workout_note: (set.set_number === 1) ? (set.workout_note || "") : ""
-    };
-  });
+  }
 
   const customizedExercisePayload = Object.entries(state.exerciseRegistry).map(([name, config]) => {
     return {
@@ -2465,6 +2750,43 @@ function getRowValue(row, keys) {
   return undefined;
 }
 
+function syncLocalRestDaysWithSheet(workoutRows) {
+  if (state.auth.mode !== 'user') return;
+  const datesOnSheet = new Set();
+  
+  workoutRows.forEach(row => {
+    const dateVal = getRowValue(row, ['date']);
+    if (!dateVal || dateVal === 'undefined') return;
+    let parsedDate = dateVal;
+    if (typeof parsedDate === 'string' && parsedDate.includes('T')) {
+      parsedDate = parsedDate.split('T')[0];
+    }
+    const d = new Date(parsedDate + 'T00:00:00');
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      datesOnSheet.add(`${year}-${month}-${day}`);
+    }
+  });
+
+  const history = state.history || {};
+  let syncCount = 0;
+  for (const date in history) {
+    const record = history[date];
+    if (record && (record.dayLabel === 'Rest Day' || (record.exercises && record.exercises.length === 0))) {
+      if (!datesOnSheet.has(date)) {
+        console.log(`Dynamic History Sync: Transmitting missing Rest Day for ${date} to Google Sheets...`);
+        transmitWebhookLog(record).catch(err => console.error(`Error syncing Rest Day for ${date}:`, err));
+        syncCount++;
+      }
+    }
+  }
+  if (syncCount > 0) {
+    console.log(`Enqueued ${syncCount} local Rest Day(s) to Google Sheets sync pipeline.`);
+  }
+}
+
 async function restoreHistoryFromSheets() {
   const statusEl = document.getElementById('webhook-restore-status');
   if (!statusEl) return;
@@ -2506,6 +2828,9 @@ async function restoreHistoryFromSheets() {
     } else {
       throw new Error("Invalid response format received from Google Sheet.");
     }
+    
+    // Sync local rest days to sheet if missing
+    syncLocalRestDaysWithSheet(workoutRows);
     
     // Restore weight history
     const reconstructedWeights = {};
@@ -3048,14 +3373,16 @@ function autoLogPastRestDays() {
   
   // One-time fix for Saturday, June 27, 2026 Rest Day logging
   if (!history['2026-06-27']) {
-    history['2026-06-27'] = {
+    const fixedRecord = {
       date: '2026-06-27',
       dayLabel: 'Rest Day',
       templateDay: '',
       elapsedTime: '00:00',
       exercises: []
     };
+    history['2026-06-27'] = fixedRecord;
     localStorage.setItem(KEYS.HISTORY, JSON.stringify(history));
+    transmitWebhookLog(fixedRecord).catch(err => console.error("Sheets rest day sync error", err));
     console.log("Logged missing Rest Day on Saturday, June 27, 2026.");
   }
   
@@ -3083,6 +3410,7 @@ function autoLogPastRestDays() {
           exercises: []
         };
         history[dateStr] = workoutRecord;
+        transmitWebhookLog(workoutRecord).catch(err => console.error("Sheets rest day sync error", err));
         modified = true;
       }
     }

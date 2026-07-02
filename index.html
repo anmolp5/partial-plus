@@ -97,7 +97,6 @@
               <span id="swap-select-current-text">Saturday (Lower)</span>
               <span style="color: var(--text-muted); font-size: 10px;">▼</span>
             </button>
-            <button id="btn-swap-workout" class="btn btn-secondary" style="margin-top:8px; display:none; padding:10px 14px;">Swap Workout</button>
           </div>
           
           <button id="btn-start-workout" class="btn btn-start" style="margin-top:16px;">
@@ -764,16 +763,40 @@
 
 
 
-      <!-- Custom Day Selector Swap Modal -->
-      <dialog id="swap-custom-menu-modal" class="history-detail-modal" closedby="any" style="max-width:350px; width:90%; border: none; background: transparent; padding: 0; outline: none; margin: auto;">
-        <div class="dialog-content" style="background: #000000; border: 1px solid var(--border-glass); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.85);">
-          <div class="dialog-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;">
-            <span style="font-size:15px; font-weight:700; color:var(--text-primary);">Swap Today's Workout</span>
-            <button type="button" id="btn-close-swap-menu-modal" style="background:none; border:none; color:var(--text-muted); font-size:22px; cursor:pointer; line-height: 1;">&times;</button>
+      <!-- Custom Day Selector Swap Modal (Redesigned Card) -->
+      <dialog id="swap-custom-menu-modal" class="history-detail-modal" closedby="any" style="max-width:420px; width:95%; border: none; background: transparent; padding: 0; outline: none; margin: 40px auto 0 auto; top: 0; position: absolute; left: 0; right: 0; z-index: 1000;">
+        <div class="dialog-content" style="background: #000000; border: 1px solid var(--border-glass); border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.85); max-height: calc(100vh - 80px); box-sizing: border-box;">
+          
+          <!-- Header -->
+          <div class="dialog-header" style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 10px;">
+            <span style="font-size:16px; font-weight:700; color:var(--text-primary);">Swap Workout</span>
+            <button type="button" id="btn-close-swap-menu-modal" style="background:none; border:none; color:var(--text-muted); font-size:24px; cursor:pointer; line-height: 1;">&times;</button>
           </div>
-          <div class="dialog-body" id="swap-custom-menu-list" style="display:flex; flex-direction:column; gap:10px; max-height:450px; overflow-y:auto; padding-right:2px;">
-            <!-- Custom capsule pills rendered here -->
+
+          <!-- Top Section (Standard Week): Pinned / Non-scrollable -->
+          <div id="swap-week-section" style="display:flex; flex-direction:column; gap:8px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Standard Week</div>
+            <div id="swap-week-days-list" style="display:flex; flex-direction:column; background: rgba(255,255,255,0.02); border: 1px solid var(--border-glass); border-radius: 16px; overflow:hidden;">
+              <!-- 7 rows populated dynamically here -->
+            </div>
           </div>
+
+          <!-- Bottom Section (Custom Workouts): Scrollable -->
+          <div style="display:flex; flex-direction:column; gap:8px; flex: 1; min-height: 0;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Custom Workouts</div>
+            <div id="swap-custom-section-list" style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:4px; max-height: 180px;">
+              <!-- Custom templates populated dynamically here -->
+            </div>
+          </div>
+
+          <!-- Swap Status Banner (internal to modal) -->
+          <div id="swap-modal-status-banner" style="display:none; padding:10px; border-radius:10px; text-align:center; font-size:13px; font-weight:600; margin-top: 4px;"></div>
+
+          <!-- Action Button Pinned to Bottom -->
+          <div style="border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px; display:flex; justify-content:center;">
+            <button id="btn-execute-swap" class="btn btn-start" style="width: 100%; margin: 0;" disabled>Swap</button>
+          </div>
+
         </div>
       </dialog>
 
